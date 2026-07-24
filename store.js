@@ -23,7 +23,8 @@ const DEFAULTS = {
     tags: [],
     sortingOption: 'A-Z',
     viewMode: 'by-category',   // 'by-category' | 'by-status' | 'flat'
-    statusFilter: 'all'    // 'all' | 'installed' | 'not-wanted' | 'diff'
+    statusFilter: 'recent',    // 'all' | 'recent' | 'installed' | 'not-wanted' | 'diff'
+    statusFilterVersion: 1
 };
 
 // Keys previously stored in settings.json; migrated once then cleared.
@@ -49,12 +50,27 @@ function read() {
     return { ...DEFAULTS };
 }
 
+function sortKeys(value) {
+    if (Array.isArray(value)) {
+        return value.map(sortKeys);
+    }
+    if (value && typeof value === 'object') {
+        return Object.keys(value)
+            .sort((a, b) => a.localeCompare(b))
+            .reduce((sorted, key) => {
+                sorted[key] = sortKeys(value[key]);
+                return sorted;
+            }, {});
+    }
+    return value;
+}
+
 /** Persist the whole state atomically. */
 function write(state) {
     if (!file) return;
     try {
         fs.mkdirSync(path.dirname(file), { recursive: true });
-        fs.writeFileSync(file, JSON.stringify(state, null, 2), 'utf8');
+        fs.writeFileSync(file, `${JSON.stringify(sortKeys(state), null, 2)}\n`, 'utf8');
     } catch (e) {
         console.warn('[extensions-bookmark] write store failed:', e);
     }
@@ -121,6 +137,10 @@ function normalize(o) {
     if (Array.isArray(o.bookmarks)) out.bookmarks = o.bookmarks;
     if (Array.isArray(o.tags)) out.tags = o.tags;
     if (typeof o.sortingOption === 'string') out.sortingOption = o.sortingOption;
+    if (typeof o.viewMode === 'string') out.viewMode = o.viewMode;
+    if (o.statusFilterVersion === 1 && typeof o.statusFilter === 'string') {
+        out.statusFilter = o.statusFilter;
+    }
     return out;
 }
 

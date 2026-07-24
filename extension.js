@@ -47,14 +47,94 @@ function sortBookmarks(list, sortingOption) {
     }
 }
 
-function passesFilter(d, statusFilter) {
+function getRecentHours() {
+    const hours = vscode.workspace.getConfiguration('extensionsBookmark').get('recentHours', 12);
+    return Number.isFinite(hours) && hours > 0 ? hours : 12;
+}
+
+function wasAddedWithin(bookmark, hours) {
+    const addedAt = new Date(bookmark.dateAdded).getTime();
+    const age = Date.now() - addedAt;
+    return Number.isFinite(addedAt) && age >= 0 && age <= hours * 60 * 60 * 1000;
+}
+
+function passesFilter(d, statusFilter, recentHours) {
     switch (statusFilter) {
+        case 'recent':     return wasAddedWithin(d.bookmark, recentHours);
         case 'installed':  return d.actual;
         case 'not-wanted': return d.want === false;
         case 'diff':       return d.status === 'want-install' || d.status === 'want-uninstall';
         case 'all':
         default:           return true;
     }
+}
+
+function parseExtensionIds(value) {
+    const seen = new Set();
+    const ids = [];
+    const invalid = [];
+    for (const raw of String(value || '').split(/[\s,;]+/)) {
+        const id = raw.trim();
+        if (!id) continue;
+        if (!/^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9._-]*$/i.test(id)) {
+            invalid.push(id);
+            continue;
+        }
+        const key = id.toLowerCase();
+        if (!seen.has(key)) {
+            seen.add(key);
+            ids.push(id);
+        }
+    }
+    return { ids, invalid };
+}
+
+async function fetchMarketplaceBookmark(extensionId, category) {
+    const response = await axios.post(
+        'https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery',
+        {
+            filters: [{
+                criteria: [{ filterType: 7, value: extensionId }]
+            }],
+            flags: 914
+        },
+        {
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json;api-version=3.0-preview.1'
+            }
+        }
+    );
+    const extension = response.data.results?.[0]?.extensions?.[0];
+    if (!extension) return null;
+
+    const version = extension.versions[0];
+    const iconFile = (version.files || []).find(file => file.assetType === 'Microsoft.VisualStudio.Services.Icons.Default');
+    const downloadCount = (extension.statistics || []).find(stat => stat.statisticName === 'install');
+    const rating = (extension.statistics || []).find(stat => stat.statisticName === 'averagerating');
+    return {
+        id: extensionId,
+        displayName: extension.displayName,
+        icon: iconFile ? iconFile.source : 'https://raw.githubusercontent.com/jaypume/extensions-bookmark/main/media/default-bookmark-icon.png',
+        category,
+        dateAdded: new Date().toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric'
+        }),
+        downloadCount: downloadCount ? downloadCount.value.toLocaleString() : 'N/A',
+        rating: rating ? rating.value.toFixed(1) : 'N/A',
+        lastUpdate: new Date(version.lastUpdated).toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric'
+        }),
+        wantedInstall: true
+    };
 }
 
 function toBookmarkTreeItem(d) {
@@ -91,7 +171,7 @@ class BookmarkDataProvider {
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
         this.viewMode = store.get('viewMode', 'by-category');
-        this.statusFilter = store.get('statusFilter', 'all');
+        this.statusFilter = store.get('statusFilter', 'recent');
     }
 
     refresh() {
@@ -109,7 +189,8 @@ class BookmarkDataProvider {
         const installedSet = computeInstalledSet();
 
         const decorate = (bm) => decorateBookmark(bm, installedSet);
-        const visible = (d) => passesFilter(d, this.statusFilter);
+        const recentHours = getRecentHours();
+        const visible = (d) => passesFilter(d, this.statusFilter, recentHours);
 
         if (element) {
             let inGroup;
@@ -399,38 +480,33 @@ function activate(context) {
 
     // Command to select adding a bookmark, adding a category, search, import or export, filter, sort, remove all data
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.add', async () => {
-        const options = ['Add Bookmark', 'Add Category', 'Add Tag', 'Rename Tag', 'Remove Tag', 'Sort Bookmarks', 'Filter Bookmarks', 'Sync to Data', 'Sync from Data', 'Import Data', 'Export Data', 'Remove All Data'];
-        const selectedOption = await vscode.window.showQuickPick(options, { placeHolder: 'Select an option' });
-        if (selectedOption === options[0]) {
-            vscode.commands.executeCommand('extensions-bookmark.addBookmark');
-        } else if (selectedOption === options[1]) {
-            vscode.commands.executeCommand('extensions-bookmark.addCategory');
-        } else if (selectedOption === options[2]) {
-            vscode.commands.executeCommand('extensions-bookmark.addTagToList');
-        } else if (selectedOption === options[3]) {
-            vscode.commands.executeCommand('extensions-bookmark.renameTagInList');
-        } else if (selectedOption === options[4]) {
-            vscode.commands.executeCommand('extensions-bookmark.removeTagFromList');
-        } else if (selectedOption === options[5]) {
-            vscode.commands.executeCommand('extensions-bookmark.sortBookmarks');
-        } else if (selectedOption === options[6]) {
-            vscode.commands.executeCommand('extensions-bookmark.filterByTag');
-        } else if (selectedOption === options[7]) {
-            vscode.commands.executeCommand('extensions-bookmark.syncToData');
-        } else if (selectedOption === options[8]) {
-            vscode.commands.executeCommand('extensions-bookmark.syncFromData');
-        } else if (selectedOption === options[9]) {
-            vscode.commands.executeCommand('extensions-bookmark.importData');
-        } else if (selectedOption === options[10]) {
-            vscode.commands.executeCommand('extensions-bookmark.exportData');
-        } else if (selectedOption === options[11]) {
-            vscode.commands.executeCommand('extensions-bookmark.removeAllData');
-        }
+        const options = [
+            { label: 'Add Bookmark', command: 'extensions-bookmark.addBookmark' },
+            { label: 'Add from List', command: 'extensions-bookmark.addFromList' },
+            { label: 'Add Category', command: 'extensions-bookmark.addCategory' },
+            { label: 'Add Tag', command: 'extensions-bookmark.addTagToList' },
+            { label: 'Rename Tag', command: 'extensions-bookmark.renameTagInList' },
+            { label: 'Remove Tag', command: 'extensions-bookmark.removeTagFromList' },
+            { label: 'Sort Bookmarks', command: 'extensions-bookmark.sortBookmarks' },
+            { label: 'Filter Bookmarks', command: 'extensions-bookmark.filterByTag' },
+            { label: 'Sync to Data', command: 'extensions-bookmark.syncToData' },
+            { label: 'Sync from Data', command: 'extensions-bookmark.syncFromData' },
+            { label: 'Import Data', command: 'extensions-bookmark.importData' },
+            { label: 'Export Data', command: 'extensions-bookmark.exportData' },
+            { label: 'Remove All Data', command: 'extensions-bookmark.removeAllData' }
+        ];
+        const selected = await vscode.window.showQuickPick(options, { placeHolder: 'Select an option' });
+        if (selected) vscode.commands.executeCommand(selected.command);
     }));
 
     // Command to refresh the bookmark tree view (re-read from the store)
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.refresh', () => {
         bookmarkDataProvider.refresh();
+    }));
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => {
+        if (event.affectsConfiguration('extensionsBookmark.recentHours')) {
+            bookmarkDataProvider.refresh();
+        }
     }));
 
     // Cycle view modes: by-category → by-status → flat → by-category.
@@ -444,15 +520,18 @@ function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.switchToFlat', () => setViewMode('flat')));
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.switchToByCategory', () => setViewMode('by-category')));
 
-    // Filter bookmarks by install/wanted status.
+    // Filter bookmarks by added time or install/wanted status.
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.filterStatus', async () => {
+        const recentHours = getRecentHours();
+        const recentUnit = recentHours === 1 ? 'hour' : 'hours';
         const options = [
+            { label: `Added Recently (${recentHours} ${recentUnit})`, value: 'recent' },
             { label: 'All', value: 'all' },
             { label: 'Installed', value: 'installed' },
             { label: 'Expected to Uninstall', value: 'not-wanted' },
             { label: 'Diff Only (out of sync)', value: 'diff' }
         ];
-        const picked = await vscode.window.showQuickPick(options, { placeHolder: 'Filter bookmarks by status' });
+        const picked = await vscode.window.showQuickPick(options, { placeHolder: 'Filter bookmarks' });
         if (!picked) return;
         bookmarkDataProvider.statusFilter = picked.value;
         store.update('statusFilter', picked.value);
@@ -596,56 +675,152 @@ function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.addBookmark', async () => {
         const categories = store.get('categories', []);
         const bookmarks = store.get('bookmarks', []);
-        const selectedExtension = await vscode.window.showInputBox({ prompt: 'Enter the identifier of the extension (publisher.extensionname)' });
+        const input = await vscode.window.showInputBox({
+            prompt: 'Enter the identifier of the extension (publisher.extensionname)'
+        });
+        const selectedExtension = input?.trim();
+        if (!selectedExtension) return;
 
-        if (selectedExtension && selectedExtension.trim() !== '' && !bookmarks.find(bookmark => bookmark.id === selectedExtension)) {
-            // Sort categories alphabetically, but keep 'Default' at the top
-            const sortedCategories = categories.sort((a, b) => {
-                if (a === 'Default') return -1;
-                if (b === 'Default') return 1;
-                return a.localeCompare(b);
+        const parsed = parseExtensionIds(selectedExtension);
+        if (parsed.ids.length !== 1 || parsed.invalid.length > 0) {
+            vscode.window.showWarningMessage(`Invalid extension ID: ${selectedExtension}`);
+            return;
+        }
+        if (bookmarks.some(bookmark => bookmark.id.toLowerCase() === selectedExtension.toLowerCase())) {
+            vscode.window.showInformationMessage(`Bookmark ${selectedExtension} already exists.`);
+            return;
+        }
+
+        const sortedCategories = categories.slice().sort((a, b) => {
+            if (a === 'Default') return -1;
+            if (b === 'Default') return 1;
+            return a.localeCompare(b);
+        });
+        const selectedCategory = await vscode.window.showQuickPick(sortedCategories, {
+            placeHolder: 'Select a category for the bookmark'
+        });
+        if (!selectedCategory) return;
+
+        try {
+            const bookmark = await fetchMarketplaceBookmark(selectedExtension, selectedCategory);
+            if (!bookmark) {
+                vscode.window.showErrorMessage(`Extension ${selectedExtension} not found.`);
+                return;
+            }
+            bookmarks.push(bookmark);
+            await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+            bookmarkDataProvider.refresh();
+            vscode.window.showInformationMessage(`Extension ${selectedExtension} has been bookmarked.`);
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to add bookmark for ${selectedExtension}: ${error}`);
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.addFromList', async () => {
+        const clipboard = await vscode.env.clipboard.readText();
+        const clipboardItems = parseExtensionIds(clipboard);
+        let input;
+
+        if (clipboardItems.ids.length > 0) {
+            const source = await vscode.window.showQuickPick([
+                {
+                    label: `Use Clipboard (${clipboardItems.ids.length} IDs)`,
+                    value: 'clipboard',
+                    description: clipboardItems.ids.slice(0, 3).join(', ')
+                },
+                {
+                    label: 'Enter IDs',
+                    value: 'manual',
+                    description: 'Separate IDs with spaces, commas, or semicolons'
+                }
+            ], { placeHolder: 'Choose the extension list source' });
+            if (!source) return;
+            input = source.value === 'clipboard'
+                ? clipboard
+                : await vscode.window.showInputBox({
+                    prompt: 'Enter extension IDs separated by spaces, commas, or semicolons'
+                });
+        } else {
+            input = await vscode.window.showInputBox({
+                prompt: 'Enter extension IDs separated by spaces, commas, or semicolons'
             });
-            const selectedCategory = await vscode.window.showQuickPick(sortedCategories, { placeHolder: 'Select a category for the bookmark' });
+        }
+        if (!input) return;
 
-            if (selectedCategory) {
-                let [publisher, extensionName] = selectedExtension.split('.');
-                try {
-                    let response = await axios.create().post('https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery', {
-                        filters: [{
-                            criteria: [
-                                { filterType: 7, value: `${publisher}.${extensionName}` }
-                            ]
-                        }],
-                        flags: 914
-                    }, {
-                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json;api-version=3.0-preview.1' }
+        const { ids, invalid } = parseExtensionIds(input);
+        if (ids.length === 0) {
+            vscode.window.showWarningMessage('No valid extension IDs found.');
+            return;
+        }
+
+        const bookmarks = store.get('bookmarks', []);
+        const existing = new Set(bookmarks.map(bookmark => String(bookmark.id).toLowerCase()));
+        const skipped = ids.filter(id => existing.has(id.toLowerCase()));
+        const pending = ids.filter(id => !existing.has(id.toLowerCase()));
+        const added = [];
+        const failed = [...invalid];
+        const notify = () => {
+            const examples = skipped.slice(0, 3).join(', ');
+            const more = skipped.length > 3 ? `, +${skipped.length - 3} more` : '';
+            const skippedDetails = examples ? ` Skipped: ${examples}${more}.` : '';
+            const summary = `Added ${added.length}, skipped ${skipped.length} existing, failed ${failed.length}.${skippedDetails}`;
+            if (failed.length > 0) {
+                vscode.window.showWarningMessage(summary);
+            } else {
+                vscode.window.showInformationMessage(summary);
+            }
+        };
+        if (pending.length === 0) {
+            notify();
+            return;
+        }
+
+        const categories = store.get('categories', []);
+        const sortedCategories = categories.slice().sort((a, b) => {
+            if (a === 'Default') return -1;
+            if (b === 'Default') return 1;
+            return a.localeCompare(b);
+        });
+        const category = await vscode.window.showQuickPick(sortedCategories, {
+            placeHolder: 'Select a category for the bookmarks'
+        });
+        if (!category) return;
+
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: 'Adding bookmarks from list',
+                cancellable: false
+            },
+            async progress => {
+                for (let index = 0; index < pending.length; index++) {
+                    const id = pending[index];
+                    progress.report({
+                        increment: pending.length ? 100 / pending.length : 100,
+                        message: `${index + 1}/${pending.length}: ${id}`
                     });
-
-                    if (response.data.results[0].extensions.length > 0) {
-                        let extensionData = response.data.results[0].extensions[0];
-                        let displayName = extensionData.displayName;
-                        let iconFile = extensionData.versions[0].files.find(file => file.assetType === "Microsoft.VisualStudio.Services.Icons.Default");
-                        let icon = iconFile ? iconFile.source : 'https://raw.githubusercontent.com/jaypume/extensions-bookmark/main/media/default-bookmark-icon.png';
-                        let downloadCountStat = extensionData.statistics.find(stat => stat.statisticName === "install");
-                        let downloadCount = downloadCountStat ? downloadCountStat.value.toLocaleString() : 'N/A';
-                        let ratingStat = extensionData.statistics.find(stat => stat.statisticName === "averagerating");
-                        let rating = ratingStat ? ratingStat.value.toFixed(1) : 'N/A';
-                        let dateAdded = new Date().toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
-                        let lastUpdate = new Date(extensionData.versions[0].lastUpdated).toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
-                        bookmarks.push({ id: selectedExtension, displayName: displayName, icon: icon, category: selectedCategory, dateAdded: dateAdded, downloadCount: downloadCount, rating: rating, lastUpdate: lastUpdate, wantedInstall: true });
-                        await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
-                        bookmarkDataProvider.refresh();
-                        vscode.window.showInformationMessage(`Extension ${selectedExtension} has been bookmarked.`);
-                    } else {
-                        vscode.window.showErrorMessage(`Extension ${selectedExtension} not found.`);
+                    try {
+                        const bookmark = await fetchMarketplaceBookmark(id, category);
+                        if (bookmark) {
+                            bookmarks.push(bookmark);
+                            added.push(id);
+                        } else {
+                            failed.push(id);
+                        }
+                    } catch (error) {
+                        console.warn(`[extensions-bookmark] failed to add ${id}:`, error);
+                        failed.push(id);
                     }
-                } catch (error) {
-                    vscode.window.showErrorMessage(`Failed to add bookmark for ${selectedExtension}: ${error}`);
                 }
             }
-        } else if (selectedExtension && selectedExtension.trim() !== '') {
-            vscode.window.showErrorMessage(`Bookmark ${selectedExtension} already exists.`);
+        );
+
+        if (added.length > 0) {
+            await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+            bookmarkDataProvider.refresh();
         }
+
+        notify();
     }));
 
     // Command to view all bookmarks

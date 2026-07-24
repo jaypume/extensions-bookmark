@@ -3,7 +3,7 @@
   "displayName": "Extensions Bookmark",
   "description": "Bookmark Visual Studio Code extensions for later use.",
   "icon": "media/extension-bookmarker-logo.png",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "publisher": "pujie",
   "repository": {
     "type": "git",
@@ -18,6 +18,7 @@
   "activationEvents": [
     "onCommand:extensions-bookmark.add",
     "onCommand:extensions-bookmark.addBookmark",
+    "onCommand:extensions-bookmark.addFromList",
     "onCommand:extensions-bookmark.viewBookmarks",
     "onCommand:extensions-bookmark.removeBookmark",
     "onCommand:extensions-bookmark.addCategory",
@@ -79,6 +80,10 @@
       {
         "command": "extensions-bookmark.addBookmark",
         "title": "Add Bookmark"
+      },
+      {
+        "command": "extensions-bookmark.addFromList",
+        "title": "Add Bookmarks from List"
       },
       {
         "command": "extensions-bookmark.viewBookmarks",
@@ -206,7 +211,7 @@
       },
       {
         "command": "extensions-bookmark.filterStatus",
-        "title": "Filter by Status",
+        "title": "Filter Bookmarks",
         "icon": "$(filter)"
       },
       {
@@ -226,6 +231,17 @@
         "title": "Sync (Install or Uninstall)"
       }
     ],
+    "configuration": {
+      "title": "Extensions Bookmark",
+      "properties": {
+        "extensionsBookmark.recentHours": {
+          "type": "number",
+          "default": 12,
+          "minimum": 1,
+          "description": "Number of hours included by the Added Recently bookmark filter."
+        }
+      }
+    },
     "menus": {
       "view/title": [
         {
