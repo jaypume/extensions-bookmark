@@ -1,9 +1,15 @@
 Changelog
 =========
 
-All notable changes to Extension Bookmarker will be documented in this file.
+All notable changes to Extensions Bookmark will be documented in this file.
 
-CURRENT VERSION - 1.0.2
+CURRENT VERSION - 1.1.0
+-----------------------
+### CHANGES
+- Renamed to **Extensions Bookmark** (`pujie.extensions-bookmark`); forked from `osxzxso/extension-bookmarker`.
+- Storage moved out of `settings.json` into a standalone JSON file under the extension's `globalStorage` directory (`User/globalStorage/pujie.extensions-bookmark/data.json`); legacy `settings.json` data is migrated automatically on first run.
+
+1.0.2
 -----------------------
 ### CHANGES - released on 7/7/2023
 - Added more checks to the addBookmark command to address errors when fetching bookmarks with missing data.

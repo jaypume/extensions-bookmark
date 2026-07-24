@@ -1,14 +1,14 @@
-Extension Bookmarker
-====================
+Extensions Bookmark
+===================
 
 OVERVIEW
 --------
 
-Extension Bookmarker is a Visual Studio Code (VSC) extension that allows you to bookmark other extensions. This makes it easy to keep track of your favorite or frequently used extensions, as well as those you are interested in but perhaps not ready to install yet.
+Extensions Bookmark is a Visual Studio Code (VSC) extension that allows you to bookmark other extensions. This makes it easy to keep track of your favorite or frequently used extensions, as well as those you are interested in but perhaps not ready to install yet.
 
 DEMO
 ----
-![Demo](https://raw.githubusercontent.com/osxzxso/extension-bookmarker/main/media/extension-bookmarker-demo.gif "Demo")
+![Demo](https://raw.githubusercontent.com/jaypume/extensions-bookmark/main/media/extension-bookmarker-demo.gif "Demo")
 
 **Note**: When adding or removing bookmarks, make sure to copy the identifier exactly as shown, including the publisher and extension name (publisher.extensionname).
 
@@ -32,7 +32,7 @@ CURRENT FEATURES
 8. **Bookmark Notes**: Add, edit, and remove a personal note for each bookmark, providing added context and better recall.
 9. **View Details**: View that includes each bookmark's properties and note, as well as marketplace details such as: download count, rating, and last update date.
 10. **Remove All Data**: Ability to remove all data in one command (confirmation required).
-11. **Synchronization Across Installations**: Enable Settings Sync to sync data across different installations of VSC.
+11. **Standalone File Storage**: All data is kept in a standalone JSON file under the extension's `globalStorage` directory (`User/globalStorage/pujie.extensions-bookmark/data.json`) instead of polluting `settings.json` — easy to back up, edit, or track in version control.
 
 UPCOMING FEATURES/IDEAS
 -----------------------
@@ -47,13 +47,15 @@ UPCOMING FEATURES/IDEAS
 9. **Unified Input Instructions**: Place all input instructions in a common location, either as a placeholder or below the input area.
 10. **Drag-and-Drop Functionality**: Enable drag-and-drop functionality for moving bookmarks between categories. 
 
-CURRENT VERSION - 1.0.2
+CURRENT VERSION - 1.1.0
 -----------------------
-### CHANGES - released on 7/7/2023
-- Added more checks to the addBookmark command to address errors when fetching bookmarks with missing data.
+### CHANGES
+- Renamed to **Extensions Bookmark** (`pujie.extensions-bookmark`).
+- Storage moved out of `settings.json` into a standalone JSON file under the extension's `globalStorage` directory; legacy data is migrated automatically on first run.
+- Forked from `osxzxso/extension-bookmarker` (1.0.2).
 
 <sub>view CHANGELOG for full history</sub>
 
 Support
 -------
-If you encounter any problems or have suggestions for Extension Bookmarker, feel free to open an issue on the [GitHub repository](https://github.com/osxzxso/extension-bookmarker). Your feedback is always welcome and appreciated!
+If you encounter any problems or have suggestions for Extensions Bookmark, feel free to open an issue on the [GitHub repository](https://github.com/jaypume/extensions-bookmark). Your feedback is always welcome and appreciated!

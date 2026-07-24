@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const store = require('./store');
 
 class BookmarkDataProvider {
     constructor() {
@@ -18,9 +19,9 @@ class BookmarkDataProvider {
     }
 
     async getChildren(element) {
-        const categories = vscode.workspace.getConfiguration('extension-bookmarker').get('categories', []);
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
-        const sortingOption = vscode.workspace.getConfiguration('extension-bookmarker').get('sortingOption', 'A-Z');
+        const categories = store.get('categories', []);
+        const bookmarks = store.get('bookmarks', []);
+        const sortingOption = store.get('sortingOption', 'A-Z');
 
         if (element) {
             let bookmarksInCategory = bookmarks.filter(bookmark => bookmark.category === element.label);
@@ -50,7 +51,7 @@ class BookmarkDataProvider {
                 }
                 treeItem.tooltip = details;
                 treeItem.command = {
-                    command: 'extension-bookmarker.openExtension',
+                    command: 'extensions-bookmark.openExtension',
                     arguments: [bookmark.id],
                     title: 'Open Extension'
                 };
@@ -76,52 +77,58 @@ class BookmarkDataProvider {
 }
 
 function activate(context) {
+    // Backing store: standalone JSON file under globalStorage, migrated from
+    // settings.json on first run. See store.js. The data file is written
+    // synchronously; clearing legacy settings.json keys is best-effort async.
+    store.init(context);
+    store.migrate().catch(e => console.warn('[extensions-bookmark] migrate failed:', e));
+
     const bookmarkDataProvider = new BookmarkDataProvider();
-    vscode.window.registerTreeDataProvider('extensionBookmarkerView', bookmarkDataProvider);
+    vscode.window.registerTreeDataProvider('extensionsBookmarkView', bookmarkDataProvider);
 
     // Initialize categories if not already initialized
-    let categories = vscode.workspace.getConfiguration('extension-bookmarker').get('categories', []);
+    let categories = store.get('categories', []);
     if (!Array.isArray(categories)) {
-        vscode.workspace.getConfiguration('extension-bookmarker').update('categories', [], vscode.ConfigurationTarget.Global);
+        store.update('categories', []);
     }
 
     // Initialize tags if not already initialized
-    let tags = vscode.workspace.getConfiguration('extension-bookmarker').get('tags', []);
+    let tags = store.get('tags', []);
     if (!Array.isArray(tags)) {
-        vscode.workspace.getConfiguration('extension-bookmarker').update('tags', [], vscode.ConfigurationTarget.Global);
+        store.update('tags', []);
     }
 
     // Command to select adding a bookmark, adding a category, search, import or export, filter, sort, remove all data
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.add', async () => {
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.add', async () => {
         const options = ['Add Bookmark', 'Add Category', 'Add Tag', 'Rename Tag', 'Remove Tag', 'Sort Bookmarks', 'Filter Bookmarks', 'Import Data', 'Export Data', 'Remove All Data'];
         const selectedOption = await vscode.window.showQuickPick(options, { placeHolder: 'Select an option' });
         if (selectedOption === options[0]) {
-            vscode.commands.executeCommand('extension-bookmarker.addBookmark');
+            vscode.commands.executeCommand('extensions-bookmark.addBookmark');
         } else if (selectedOption === options[1]) {
-            vscode.commands.executeCommand('extension-bookmarker.addCategory');
+            vscode.commands.executeCommand('extensions-bookmark.addCategory');
         } else if (selectedOption === options[2]) {
-            vscode.commands.executeCommand('extension-bookmarker.addTagToList');
+            vscode.commands.executeCommand('extensions-bookmark.addTagToList');
         } else if (selectedOption === options[3]) {
-            vscode.commands.executeCommand('extension-bookmarker.renameTagInList');
+            vscode.commands.executeCommand('extensions-bookmark.renameTagInList');
         } else if (selectedOption === options[4]) {
-            vscode.commands.executeCommand('extension-bookmarker.removeTagFromList');
+            vscode.commands.executeCommand('extensions-bookmark.removeTagFromList');
         } else if (selectedOption === options[5]) {
-            vscode.commands.executeCommand('extension-bookmarker.sortBookmarks');
+            vscode.commands.executeCommand('extensions-bookmark.sortBookmarks');
         } else if (selectedOption === options[6]) {
-            vscode.commands.executeCommand('extension-bookmarker.filterByTag');
+            vscode.commands.executeCommand('extensions-bookmark.filterByTag');
         } else if (selectedOption === options[7]) {
-            vscode.commands.executeCommand('extension-bookmarker.importData');
+            vscode.commands.executeCommand('extensions-bookmark.importData');
         } else if (selectedOption === options[8]) {
-            vscode.commands.executeCommand('extension-bookmarker.exportData');
+            vscode.commands.executeCommand('extensions-bookmark.exportData');
         } else if (selectedOption === options[9]) {
-            vscode.commands.executeCommand('extension-bookmarker.removeAllData');
+            vscode.commands.executeCommand('extensions-bookmark.removeAllData');
         }
     }));
 
     // Command to add a bookmark
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.addBookmark', async () => {
-        const categories = vscode.workspace.getConfiguration('extension-bookmarker').get('categories', []);
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.addBookmark', async () => {
+        const categories = store.get('categories', []);
+        const bookmarks = store.get('bookmarks', []);
         const selectedExtension = await vscode.window.showInputBox({ prompt: 'Enter the identifier of the extension (publisher.extensionname)' });
 
         if (selectedExtension && selectedExtension.trim() !== '' && !bookmarks.find(bookmark => bookmark.id === selectedExtension)) {
@@ -151,7 +158,7 @@ function activate(context) {
                         let extensionData = response.data.results[0].extensions[0];
                         let displayName = extensionData.displayName;
                         let iconFile = extensionData.versions[0].files.find(file => file.assetType === "Microsoft.VisualStudio.Services.Icons.Default");
-                        let icon = iconFile ? iconFile.source : 'https://raw.githubusercontent.com/osxzxso/extension-bookmarker/main/media/default-bookmark-icon.png';
+                        let icon = iconFile ? iconFile.source : 'https://raw.githubusercontent.com/jaypume/extensions-bookmark/main/media/default-bookmark-icon.png';
                         let downloadCountStat = extensionData.statistics.find(stat => stat.statisticName === "install");
                         let downloadCount = downloadCountStat ? downloadCountStat.value.toLocaleString() : 'N/A';
                         let ratingStat = extensionData.statistics.find(stat => stat.statisticName === "averagerating");
@@ -159,7 +166,7 @@ function activate(context) {
                         let dateAdded = new Date().toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
                         let lastUpdate = new Date(extensionData.versions[0].lastUpdated).toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
                         bookmarks.push({ id: selectedExtension, displayName: displayName, icon: icon, category: selectedCategory, dateAdded: dateAdded, downloadCount: downloadCount, rating: rating, lastUpdate: lastUpdate });
-                        await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+                        await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
                         bookmarkDataProvider.refresh();
                         vscode.window.showInformationMessage(`Extension ${selectedExtension} has been bookmarked.`);
                     } else {
@@ -175,8 +182,8 @@ function activate(context) {
     }));
 
     // Command to view all bookmarks
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.viewBookmarks', async () => {
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.viewBookmarks', async () => {
+        const bookmarks = store.get('bookmarks', []);
         const sortedBookmarks = bookmarks.sort((a, b) => a.displayName.localeCompare(b.displayName));
         const selectedBookmark = await vscode.window.showQuickPick(sortedBookmarks.map(bookmark => bookmark.displayName), { placeHolder: 'Select a bookmark to view details' });
         if (selectedBookmark) {
@@ -186,13 +193,13 @@ function activate(context) {
     }));
 
     // Command to open a bookmarked extension in the Extensions view
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.openExtension', (extensionId) => {
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.openExtension', (extensionId) => {
         vscode.commands.executeCommand('workbench.extensions.search', extensionId);
     }));
 
     // Command to remove a bookmark
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.removeBookmark', async (item) => {
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.removeBookmark', async (item) => {
+        const bookmarks = store.get('bookmarks', []);
         let bookmark;
         if (item) {
             bookmark = bookmarks.find(bookmark => bookmark.id === item.command.arguments[0]);
@@ -204,15 +211,15 @@ function activate(context) {
         if (bookmark) {
             const index = bookmarks.indexOf(bookmark);
             bookmarks.splice(index, 1);
-            await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+            await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
             bookmarkDataProvider.refresh();
             vscode.window.showInformationMessage(`Bookmark ${bookmark.displayName} has been removed.`);
         }
     }));
 
     // Command to add a category
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.addCategory', async () => {
-        const categories = vscode.workspace.getConfiguration('extension-bookmarker').get('categories', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.addCategory', async () => {
+        const categories = store.get('categories', []);
         const quickPick = vscode.window.createQuickPick();
         quickPick.items = categories.sort().map(category => ({ label: category }));
         quickPick.placeholder = 'Enter a new category';
@@ -231,7 +238,7 @@ function activate(context) {
             const newCategory = quickPick.value;
             if (newCategory && newCategory.trim() !== '' && !categories.map(category => category.toLowerCase()).includes(newCategory.toLowerCase())) {
                 categories.push(newCategory);
-                await vscode.workspace.getConfiguration('extension-bookmarker').update('categories', categories, vscode.ConfigurationTarget.Global);
+                await store.update('categories', categories, vscode.ConfigurationTarget.Global);
                 bookmarkDataProvider.refresh();
                 vscode.window.showInformationMessage(`Category ${newCategory} has been added.`);
             } else if (newCategory && newCategory.trim() !== '') {
@@ -243,9 +250,9 @@ function activate(context) {
     }));
 
     // Command to rename a category
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.renameCategory', async (item) => {
-        let categories = vscode.workspace.getConfiguration('extension-bookmarker').get('categories', []);
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.renameCategory', async (item) => {
+        let categories = store.get('categories', []);
+        const bookmarks = store.get('bookmarks', []);
         let selectedCategory;
 
         // Sort categories alphabetically, but keep 'Default' at the top
@@ -284,8 +291,8 @@ function activate(context) {
                                 bookmark.category = newCategoryName;
                             }
                         });
-                        await vscode.workspace.getConfiguration('extension-bookmarker').update('categories', categories, vscode.ConfigurationTarget.Global);
-                        await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+                        await store.update('categories', categories, vscode.ConfigurationTarget.Global);
+                        await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
                         bookmarkDataProvider.refresh();
                         vscode.window.showInformationMessage(`Category ${selectedCategory} has been renamed to ${newCategoryName}.`);
                     }
@@ -303,9 +310,9 @@ function activate(context) {
     }));
 
     // Command to remove a category
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.removeCategory', async (item) => {
-        const categories = vscode.workspace.getConfiguration('extension-bookmarker').get('categories', []);
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.removeCategory', async (item) => {
+        const categories = store.get('categories', []);
+        const bookmarks = store.get('bookmarks', []);
         let selectedCategory;
 
         // Sort categories alphabetically, but keep 'Default' at the top
@@ -330,8 +337,8 @@ function activate(context) {
                     const bookmarkIndex = bookmarks.indexOf(bookmark);
                     bookmarks[bookmarkIndex].category = "Default"; // Reassign the category to "Default"
                 });
-                await vscode.workspace.getConfiguration('extension-bookmarker').update('categories', categories, vscode.ConfigurationTarget.Global);
-                await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+                await store.update('categories', categories, vscode.ConfigurationTarget.Global);
+                await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
                 bookmarkDataProvider.refresh();
                 if (bookmarksToReassign.length > 0) {
                     vscode.window.showInformationMessage(`Category ${selectedCategory} has been removed and its bookmarks have been moved to the Default category.`);
@@ -343,9 +350,9 @@ function activate(context) {
     }));
 
     // Command to move a bookmark
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.moveBookmark', async (item) => {
-        const categories = vscode.workspace.getConfiguration('extension-bookmarker').get('categories', []);
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.moveBookmark', async (item) => {
+        const categories = store.get('categories', []);
+        const bookmarks = store.get('bookmarks', []);
         let bookmark;
         if (item) {
             bookmark = bookmarks.find(bookmark => bookmark.id === item.command.arguments[0]);
@@ -368,7 +375,7 @@ function activate(context) {
             const selectedCategory = await vscode.window.showQuickPick(sortedCategories, { placeHolder: 'Select a new category for the bookmark' });
             if (selectedCategory) {
                 bookmark.category = selectedCategory;
-                await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+                await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
                 bookmarkDataProvider.refresh();
                 vscode.window.showInformationMessage(`Bookmark ${bookmark.displayName} has been moved to ${selectedCategory}.`);
             }
@@ -376,8 +383,8 @@ function activate(context) {
     }));
 
     // Command to search bookmarks
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.searchBookmarks', async () => {
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.searchBookmarks', async () => {
+        const bookmarks = store.get('bookmarks', []);
         const quickPick = vscode.window.createQuickPick();
         quickPick.items = bookmarks.sort((a, b) => a.displayName.localeCompare(b.displayName)).map(bookmark => ({ label: bookmark.displayName }));
         quickPick.placeholder = 'Enter a bookmark name or select an existing one';
@@ -402,8 +409,8 @@ function activate(context) {
     }));
 
     // Command to add a tag to list
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.addTagToList', async () => {
-        const tags = vscode.workspace.getConfiguration('extension-bookmarker').get('tags', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.addTagToList', async () => {
+        const tags = store.get('tags', []);
         const quickPick = vscode.window.createQuickPick();
         quickPick.items = tags.sort().map(tag => ({ label: tag }));
         quickPick.placeholder = 'Enter a new tag';
@@ -418,7 +425,7 @@ function activate(context) {
             const newTag = quickPick.value;
             if (newTag && newTag.trim() !== '' && !tags.includes(newTag.toLowerCase())) {
                 tags.push(newTag.toLowerCase());
-                vscode.workspace.getConfiguration('extension-bookmarker').update('tags', tags, vscode.ConfigurationTarget.Global);
+                store.update('tags', tags, vscode.ConfigurationTarget.Global);
                 vscode.window.showInformationMessage(`Tag ${newTag} has been added.`);
             } else if (newTag && newTag.trim() !== '') {
                 vscode.window.showErrorMessage(`Tag ${newTag} already exists.`);
@@ -429,9 +436,9 @@ function activate(context) {
     }));
 
     // Command to rename a tag in the list
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.renameTagInList', async () => {
-        const tags = vscode.workspace.getConfiguration('extension-bookmarker').get('tags', []);
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.renameTagInList', async () => {
+        const tags = store.get('tags', []);
+        const bookmarks = store.get('bookmarks', []);
         if (tags.length > 0) {
             const selectedTagToRename = await vscode.window.showQuickPick(tags.sort(), { placeHolder: 'Select a tag to rename' });
             if (selectedTagToRename) {
@@ -460,8 +467,8 @@ function activate(context) {
                                     }
                                 }
                             });
-                            await vscode.workspace.getConfiguration('extension-bookmarker').update('tags', tags, vscode.ConfigurationTarget.Global);
-                            await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+                            await store.update('tags', tags, vscode.ConfigurationTarget.Global);
+                            await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
                             bookmarkDataProvider.refresh(); // Refresh the TreeView
                             vscode.window.showInformationMessage(`Tag ${selectedTagToRename} has been renamed to ${newTagName}.`);
                         }
@@ -478,9 +485,9 @@ function activate(context) {
     }));
 
     // Command to remove a tag from list
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.removeTagFromList', async () => {
-        const tags = vscode.workspace.getConfiguration('extension-bookmarker').get('tags', []);
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.removeTagFromList', async () => {
+        const tags = store.get('tags', []);
+        const bookmarks = store.get('bookmarks', []);
         if (tags.length > 0) {
             // Sort the tags in A-Z order
             const sortedTags = tags.sort();
@@ -497,8 +504,8 @@ function activate(context) {
                             }
                         }
                     });
-                    await vscode.workspace.getConfiguration('extension-bookmarker').update('tags', sortedTags, vscode.ConfigurationTarget.Global);
-                    await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+                    await store.update('tags', sortedTags, vscode.ConfigurationTarget.Global);
+                    await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
                     bookmarkDataProvider.refresh(); // Refresh the TreeView
                     vscode.window.showInformationMessage(`Tag ${selectedTagToRemove} has been removed.`);
                 }
@@ -509,9 +516,9 @@ function activate(context) {
     }));
 
     // Command to add a tag to a bookmark
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.addTagToBookmark', async (item) => {
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
-        const tags = vscode.workspace.getConfiguration('extension-bookmarker').get('tags', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.addTagToBookmark', async (item) => {
+        const bookmarks = store.get('bookmarks', []);
+        const tags = store.get('tags', []);
         let bookmark;
         if (item) {
             bookmark = bookmarks.find(bookmark => bookmark.id === item.command.arguments[0]);
@@ -527,7 +534,7 @@ function activate(context) {
                 const selectedTag = await vscode.window.showQuickPick(availableTags, { placeHolder: 'Select a tag to add' });
                 if (selectedTag) {
                     bookmark.tags.push(selectedTag);
-                    await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+                    await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
                     bookmarkDataProvider.refresh(); // Refresh the TreeView
                     vscode.window.showInformationMessage(`Tag ${selectedTag} has been added to ${bookmark.displayName}.`);
                 }
@@ -542,8 +549,8 @@ function activate(context) {
     }));
 
     // Command to remove a tag from a bookmark
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.removeTagFromBookmark', async (item) => {
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.removeTagFromBookmark', async (item) => {
+        const bookmarks = store.get('bookmarks', []);
         let bookmark;
         if (item) {
             bookmark = bookmarks.find(bookmark => bookmark.id === item.command.arguments[0]);
@@ -558,7 +565,7 @@ function activate(context) {
             if (selectedTag) {
                 const index = bookmark.tags.indexOf(selectedTag);
                 bookmark.tags.splice(index, 1);
-                await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+                await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
                 bookmarkDataProvider.refresh(); // Refresh the TreeView
                 vscode.window.showInformationMessage(`Tag ${selectedTag} has been removed from ${bookmark.displayName}.`);
             }
@@ -568,8 +575,8 @@ function activate(context) {
     }));
 
     // Command to filter bookmarks by tag
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.filterByTag', async () => {
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.filterByTag', async () => {
+        const bookmarks = store.get('bookmarks', []);
         const allTags = [...new Set(bookmarks.flatMap(bookmark => bookmark.tags || []))];
         const sortedTags = allTags.sort((a, b) => a.localeCompare(b));
 
@@ -593,19 +600,19 @@ function activate(context) {
     }));
 
     // Command to change the sorting option
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.sortBookmarks', async () => {
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.sortBookmarks', async () => {
         const options = ['A-Z', 'Z-A', 'New-Old', 'Old-New'];
         const selectedOption = await vscode.window.showQuickPick(options, { placeHolder: 'Select a sorting option' });
         if (selectedOption) {
-            await vscode.workspace.getConfiguration('extension-bookmarker').update('sortingOption', selectedOption, vscode.ConfigurationTarget.Global);
+            await store.update('sortingOption', selectedOption, vscode.ConfigurationTarget.Global);
             bookmarkDataProvider.refresh();
             vscode.window.showInformationMessage(`Sorting option has been changed to ${selectedOption}.`);
         }
     }));
 
     // Command to add a note to a bookmark
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.addNote', async (item) => {
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.addNote', async (item) => {
+        const bookmarks = store.get('bookmarks', []);
         let bookmark;
         if (item) {
             bookmark = bookmarks.find(bookmark => bookmark.id === item.command.arguments[0]);
@@ -621,7 +628,7 @@ function activate(context) {
                 const newNote = await vscode.window.showInputBox({ prompt: 'Enter the note for the bookmark' });
                 if (newNote) {
                     bookmark.note = newNote;
-                    await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+                    await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
                     bookmarkDataProvider.refresh();
                     vscode.window.showInformationMessage(`Note has been added to ${bookmark.displayName}.`);
                 }
@@ -630,8 +637,8 @@ function activate(context) {
     }));
 
     // Command to edit a note of a bookmark
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.editNote', async (item) => {
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.editNote', async (item) => {
+        const bookmarks = store.get('bookmarks', []);
         let bookmark;
         if (item) {
             bookmark = bookmarks.find(bookmark => bookmark.id === item.command.arguments[0]);
@@ -645,7 +652,7 @@ function activate(context) {
                 const newNote = await vscode.window.showInputBox({ prompt: 'Enter the new note for the bookmark', value: bookmark.note });
                 if (newNote) {
                     bookmark.note = newNote;
-                    await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+                    await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
                     bookmarkDataProvider.refresh();
                     vscode.window.showInformationMessage(`Note has been updated for ${bookmark.displayName}.`);
                 }
@@ -656,8 +663,8 @@ function activate(context) {
     }));
 
     // Command to remove a note from a bookmark
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.removeNote', async (item) => {
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.removeNote', async (item) => {
+        const bookmarks = store.get('bookmarks', []);
         let bookmark;
         if (item) {
             bookmark = bookmarks.find(bookmark => bookmark.id === item.command.arguments[0]);
@@ -669,7 +676,7 @@ function activate(context) {
         if (bookmark) {
             if (bookmark.note) {
                 delete bookmark.note;
-                await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+                await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
                 bookmarkDataProvider.refresh();
                 vscode.window.showInformationMessage(`Note has been removed from ${bookmark.displayName}.`);
             } else {
@@ -679,8 +686,8 @@ function activate(context) {
     }));
 
     // Command to view a bookmark's details - text document
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.viewDetails', async (item) => {
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.viewDetails', async (item) => {
+        const bookmarks = store.get('bookmarks', []);
         let bookmark;
         if (item) {
             bookmark = bookmarks.find(bookmark => bookmark.id === item.command.arguments[0]);
@@ -704,7 +711,7 @@ function activate(context) {
     }));
 
     // Command to import data
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.importData', async () => {
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.importData', async () => {
         const filePath = await vscode.window.showOpenDialog({ defaultUri: vscode.Uri.file(vscode.workspace.rootPath), canSelectMany: false, filters: { 'JSON': ['json'] } });
         if (filePath && filePath[0]) {
             fs.readFile(filePath[0].fsPath, (err, data) => {
@@ -722,9 +729,9 @@ function activate(context) {
                             vscode.window.showErrorMessage('Invalid data structure. "categories", "bookmarks", and "tags" should be arrays.');
                             return;
                         }
-                        const existingCategories = vscode.workspace.getConfiguration('extension-bookmarker').get('categories', []);
-                        const existingBookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
-                        const existingTags = vscode.workspace.getConfiguration('extension-bookmarker').get('tags', []);
+                        const existingCategories = store.get('categories', []);
+                        const existingBookmarks = store.get('bookmarks', []);
+                        const existingTags = store.get('tags', []);
 
                         // Merge categories, bookmarks, and tags, removing duplicates
                         const mergedCategories = [...new Set([...existingCategories, ...importedCategories])];
@@ -734,9 +741,9 @@ function activate(context) {
                         const mergedTags = [...new Set([...existingTags, ...importedTags])];
 
                         Promise.all([
-                            vscode.workspace.getConfiguration('extension-bookmarker').update('categories', mergedCategories, vscode.ConfigurationTarget.Global),
-                            vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', mergedBookmarks, vscode.ConfigurationTarget.Global),
-                            vscode.workspace.getConfiguration('extension-bookmarker').update('tags', mergedTags, vscode.ConfigurationTarget.Global) // Update tags
+                            store.update('categories', mergedCategories, vscode.ConfigurationTarget.Global),
+                            store.update('bookmarks', mergedBookmarks, vscode.ConfigurationTarget.Global),
+                            store.update('tags', mergedTags, vscode.ConfigurationTarget.Global) // Update tags
                         ]).then(() => {
                             bookmarkDataProvider.refresh(); // Refresh the data provider
                             vscode.window.showInformationMessage(`Data has been imported from ${filePath[0].fsPath}`);
@@ -752,16 +759,16 @@ function activate(context) {
     }));
 
     // Command to export data
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.exportData', async () => {
-        const categories = vscode.workspace.getConfiguration('extension-bookmarker').get('categories', []);
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
-        const tags = vscode.workspace.getConfiguration('extension-bookmarker').get('tags', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.exportData', async () => {
+        const categories = store.get('categories', []);
+        const bookmarks = store.get('bookmarks', []);
+        const tags = store.get('tags', []);
         if ((categories.length === 1 && categories[0] === 'Default') && bookmarks.length === 0 && tags.length === 0) {
             vscode.window.showInformationMessage('No data to export.');
             return;
         }
         const data = { categories, bookmarks, tags };
-        const filePath = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(path.join(vscode.workspace.rootPath, 'extension-bookmarker-data.json')) });
+        const filePath = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(path.join(vscode.workspace.rootPath, 'extensions-bookmark-data.json')) });
         if (filePath) {
             fs.writeFile(filePath.fsPath, JSON.stringify(data, null, 2), (err) => {
                 if (err) {
@@ -774,19 +781,19 @@ function activate(context) {
     }));
 
     // Command to remove all data
-    context.subscriptions.push(vscode.commands.registerCommand('extension-bookmarker.removeAllData', async () => {
-        const categories = vscode.workspace.getConfiguration('extension-bookmarker').get('categories', []);
-        const bookmarks = vscode.workspace.getConfiguration('extension-bookmarker').get('bookmarks', []);
-        const tags = vscode.workspace.getConfiguration('extension-bookmarker').get('tags', []);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.removeAllData', async () => {
+        const categories = store.get('categories', []);
+        const bookmarks = store.get('bookmarks', []);
+        const tags = store.get('tags', []);
         if ((categories.length === 1 && categories[0] === 'Default') && bookmarks.length === 0 && tags.length === 0) {
             vscode.window.showInformationMessage('No data to remove.');
             return;
         }
         const confirmation = await vscode.window.showInputBox({ prompt: 'Type "remove all data" to confirm' });
         if (confirmation === 'remove all data') {
-            await vscode.workspace.getConfiguration('extension-bookmarker').update('categories', ["Default"], vscode.ConfigurationTarget.Global);
-            await vscode.workspace.getConfiguration('extension-bookmarker').update('bookmarks', [], vscode.ConfigurationTarget.Global);
-            await vscode.workspace.getConfiguration('extension-bookmarker').update('tags', [], vscode.ConfigurationTarget.Global); // Remove all tags
+            await store.update('categories', ["Default"], vscode.ConfigurationTarget.Global);
+            await store.update('bookmarks', [], vscode.ConfigurationTarget.Global);
+            await store.update('tags', [], vscode.ConfigurationTarget.Global); // Remove all tags
             bookmarkDataProvider.refresh();
             vscode.window.showInformationMessage(`All data has been removed.`);
         } else {
