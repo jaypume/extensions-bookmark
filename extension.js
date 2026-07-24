@@ -1,8 +1,33 @@
 const vscode = require('vscode');
-const axios = require('axios');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const store = require('./store');
+const { version: extensionVersion } = require('./package.json');
+
+let outputChannel;
+
+function formatError(error) {
+    if (!error) return '';
+    return error.stack || error.message || String(error);
+}
+
+function logInfo(message) {
+    const line = `[${new Date().toISOString()}] INFO ${message}`;
+    outputChannel?.appendLine(line);
+    console.log(`[extensions-bookmark] ${message}`);
+}
+
+function logError(message, error) {
+    const detail = formatError(error);
+    const line = `[${new Date().toISOString()}] ERROR ${message}${detail ? `\n${detail}` : ''}`;
+    outputChannel?.appendLine(line);
+    console.error(`[extensions-bookmark] ${message}`, error || '');
+}
+
+function createNonce() {
+    return crypto.randomBytes(16).toString('base64');
+}
 
 // Runtime set of installed extension ids (lowercased) for status detection.
 function computeInstalledSet() {
@@ -90,6 +115,9 @@ function parseExtensionIds(value) {
 }
 
 async function fetchMarketplaceBookmark(extensionId, category) {
+    // Load Axios only when Marketplace access is needed. Provider registration
+    // remains available even if a packaged HTTP dependency is damaged.
+    const axios = require('axios');
     const response = await axios.post(
         'https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery',
         {
@@ -308,8 +336,8 @@ class DetailsViewProvider {
                     store.update('bookmarks', bookmarks);
                     this.bookmarkDataProvider.refresh();
                 }
-            } else if (msg && msg.type === 'openMarket' && msg.id) {
-                vscode.commands.executeCommand('extension.open', msg.id);
+            } else if (msg && msg.type === 'openMarket' && this.bookmarkId) {
+                vscode.commands.executeCommand('extension.open', this.bookmarkId);
             }
         });
     }
@@ -326,10 +354,11 @@ class DetailsViewProvider {
 
     // Shared <head>: codicons font (self-declared with absolute webview URI
     // so the relative path in codicon.css resolves correctly) + base CSS.
-    _head() {
+    _head(nonce) {
         const a = this.assets || {};
         return `<meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${this.view.webview.cspSource}; img-src https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
         <style>
           @font-face {
             font-family: "codicon";
@@ -341,7 +370,8 @@ class DetailsViewProvider {
     }
 
     _renderEmpty() {
-        return `<!DOCTYPE html><html><head>${this._head()}</head>
+        const nonce = createNonce();
+        return `<!DOCTYPE html><html><head>${this._head(nonce)}</head>
         <body><div class="empty">Select a bookmark to view details.</div></body></html>`;
     }
 
@@ -349,7 +379,9 @@ class DetailsViewProvider {
         const installedSet = computeInstalledSet();
         const d = decorateBookmark(bm, installedSet);
         const esc = (s) => String(s == null ? '' : s)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        const nonce = createNonce();
         const iconHtml = bm.icon
             ? `<img class="icon" src="${esc(bm.icon)}" alt="">`
             : `<div class="icon icon-placeholder"></div>`;
@@ -361,7 +393,7 @@ class DetailsViewProvider {
         const actualLabel = d.actual ? 'Installed' : 'Not installed';
         const actualCls = d.actual ? 'st-ok' : 'st-mute';
         const tableRow = (k, v) => `<tr><td class="k">${k}</td><td class="v">${esc(v)}</td></tr>`;
-        return `<!DOCTYPE html><html><head>${this._head()}</head>
+        return `<!DOCTYPE html><html><head>${this._head(nonce)}</head>
         <body>
         <div class="card">
           <header class="head">
@@ -402,12 +434,12 @@ class DetailsViewProvider {
             <span>Open in Marketplace</span>
           </button>
         </div>
-        <script>
+        <script nonce="${nonce}">
           const vscode = acquireVsCodeApi();
           const ta = document.getElementById('note');
           ta.addEventListener('blur', () => vscode.postMessage({ type: 'saveNote', value: ta.value }));
           document.getElementById('openMarket').addEventListener('click', () => {
-            vscode.postMessage({ type: 'openMarket', id: ${JSON.stringify(bm.id)} });
+            vscode.postMessage({ type: 'openMarket' });
           });
         </script>
         </body></html>`;
@@ -447,19 +479,31 @@ const DETAILS_CSS = `
 `;
 
 function activate(context) {
+    outputChannel = vscode.window.createOutputChannel('Extensions Bookmark');
+    context.subscriptions.push(outputChannel);
+    logInfo(`Activating v${extensionVersion}`);
+    logInfo(`Data directory: ${context.globalStorageUri.fsPath}`);
+
+    try {
     // Backing store: standalone JSON file under globalStorage, migrated from
     // settings.json on first run. See store.js. The data file is written
     // synchronously; clearing legacy settings.json keys is best-effort async.
     store.init(context);
-    store.migrate().catch(e => console.warn('[extensions-bookmark] migrate failed:', e));
+    store.migrate().catch(error => logError('Data migration failed', error));
 
     const bookmarkDataProvider = new BookmarkDataProvider();
-    vscode.window.registerTreeDataProvider('extensionsBookmarkView', bookmarkDataProvider);
+    logInfo('Registering List tree data provider');
+    context.subscriptions.push(
+        vscode.window.registerTreeDataProvider('extensionsBookmarkView', bookmarkDataProvider)
+    );
+    logInfo('List tree data provider registered');
 
     const detailsProvider = new DetailsViewProvider(context, bookmarkDataProvider);
+    logInfo('Registering Details webview provider');
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('extensionsBookmarkDetails', detailsProvider)
     );
+    logInfo('Details webview provider registered');
 
     // Sync the view-mode context key so the toggle button shows the right icon.
     vscode.commands.executeCommand('setContext', 'extensions-bookmark.viewMode', bookmarkDataProvider.viewMode);
@@ -712,6 +756,7 @@ function activate(context) {
             bookmarkDataProvider.refresh();
             vscode.window.showInformationMessage(`Extension ${selectedExtension} has been bookmarked.`);
         } catch (error) {
+            logError(`Failed to add bookmark ${selectedExtension}`, error);
             vscode.window.showErrorMessage(`Failed to add bookmark for ${selectedExtension}: ${error}`);
         }
     }));
@@ -808,7 +853,7 @@ function activate(context) {
                             failed.push(id);
                         }
                     } catch (error) {
-                        console.warn(`[extensions-bookmark] failed to add ${id}:`, error);
+                        logError(`Failed to add bookmark ${id}`, error);
                         failed.push(id);
                     }
                 }
@@ -1437,10 +1482,24 @@ function activate(context) {
             vscode.window.showInformationMessage('Data removal cancelled.');
         }
     }));
+    logInfo('Activation completed');
+    } catch (error) {
+        logError('Activation failed', error);
+        vscode.window.showErrorMessage(
+            'Extensions Bookmark failed to activate. See Output → Extensions Bookmark.',
+            'Show Log'
+        ).then(action => {
+            if (action === 'Show Log') outputChannel?.show(true);
+        });
+        throw error;
+    }
 }
 
 // This method is called when the extension is deactivated
-function deactivate() { }
+function deactivate() {
+    logInfo('Deactivated');
+    outputChannel = undefined;
+}
 
 module.exports = {
     activate,
