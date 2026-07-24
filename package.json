@@ -25,6 +25,7 @@
     "onCommand:extensions-bookmark.removeCategory",
     "onCommand:extensions-bookmark.moveBookmark",
     "onCommand:extensions-bookmark.searchBookmarks",
+    "onCommand:extensions-bookmark.refresh",
     "onCommand:extensions-bookmark.addTagToList",
     "onCommand:extensions-bookmark.renameTagInList",
     "onCommand:extensions-bookmark.removeTagFromList",
@@ -160,6 +161,11 @@
           "light": "media/light/search-icon.png",
           "dark": "media/dark/search-icon.png"
         }
+      },
+      {
+        "command": "extensions-bookmark.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -171,6 +177,11 @@
         },
         {
           "command": "extensions-bookmark.searchBookmarks",
+          "group": "navigation",
+          "when": "view == extensionsBookmarkView"
+        },
+        {
+          "command": "extensions-bookmark.refresh",
           "group": "navigation",
           "when": "view == extensionsBookmarkView"
         }

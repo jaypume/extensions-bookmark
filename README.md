@@ -1,13 +1,11 @@
-Extensions Bookmark
-===================
+# Extensions Bookmark
 
-OVERVIEW
---------
+## OVERVIEW
 
 Extensions Bookmark is a Visual Studio Code (VSC) extension that allows you to bookmark other extensions. This makes it easy to keep track of your favorite or frequently used extensions, as well as those you are interested in but perhaps not ready to install yet.
 
-DEMO
-----
+## DEMO
+
 ![Demo](https://raw.githubusercontent.com/jaypume/extensions-bookmark/main/media/extension-bookmarker-demo.gif "Demo")
 
 **Note**: When adding or removing bookmarks, make sure to copy the identifier exactly as shown, including the publisher and extension name (publisher.extensionname).
@@ -17,11 +15,11 @@ DEMO
 1. Open the Extensions view in VSC by clicking on the "Extensions" icon in the Activity Bar on the side or by using the shortcut `Ctrl+Shift+X` (Windows/Linux) or `Cmd+Shift+X` (Mac).
 2. In the search bar at the top, enter the name or keywords related to the extension you are looking for.
 3. From the search results, locate the extension you are interested in, right click on it and select "Copy Extension ID". The extension's identifier is now copied.
-3. Alternatively, from the search results, locate the extension you are interested in and click on it to open its details page.
-4. On the details page, you will find the extension's identifier listed under the extension's "More Info" section. Select the identifier and press `Ctrl+C`. The extension's identifier is now copied.
+4. Alternatively, from the search results, locate the extension you are interested in and click on it to open its details page.
+5. On the details page, you will find the extension's identifier listed under the extension's "More Info" section. Select the identifier and press `Ctrl+C`. The extension's identifier is now copied.
 
-CURRENT FEATURES
-----------------
+## CURRENT FEATURES
+
 1. **Addition and Removal of Bookmarks**: Add and remove bookmarks, as well as select a category to associate each bookmark with.
 2. **View in Marketplace**: Select a bookmark to open it in the VSC Extensions Marketplace.
 3. **Categorization of Bookmarks**: Add, rename, and remove categories (folders), as well as move bookmarks from one category to another. There is a permanent "Default" folder available for uncategorized bookmarks.
@@ -34,8 +32,8 @@ CURRENT FEATURES
 10. **Remove All Data**: Ability to remove all data in one command (confirmation required).
 11. **Standalone File Storage**: All data is kept in a standalone JSON file under the extension's `globalStorage` directory (`User/globalStorage/pujie.extensions-bookmark/data.json`) instead of polluting `settings.json` — easy to back up, edit, or track in version control.
 
-UPCOMING FEATURES/IDEAS
------------------------
+## UPCOMING FEATURES/IDEAS
+
 1. **Bulk Add/Move/Remove Bookmarks**: Ability to add, move, and remove bookmarks in bulk.
 2. **Bulk Add/Rename/Remove Categories**: Ability to add, rename, and remove categories in bulk.
 3. **Bulk Add/Rename/Remove Tags**: Ability to add, rename, and remove tags in bulk.
@@ -45,17 +43,8 @@ UPCOMING FEATURES/IDEAS
 7. **Improved Bookmark Addition**: Ability to add bookmarks using extension names in addition to identifiers. Revise the bookmark addition process to enhance sorted display and real-time updates when providing input.
 8. **Enhanced Search Functionality**: Expand search to include all data and details for more comprehensive results.
 9. **Unified Input Instructions**: Place all input instructions in a common location, either as a placeholder or below the input area.
-10. **Drag-and-Drop Functionality**: Enable drag-and-drop functionality for moving bookmarks between categories. 
+10. **Drag-and-Drop Functionality**: Enable drag-and-drop functionality for moving bookmarks between categories.
 
-CURRENT VERSION - 1.1.0
------------------------
-### CHANGES
-- Renamed to **Extensions Bookmark** (`pujie.extensions-bookmark`).
-- Storage moved out of `settings.json` into a standalone JSON file under the extension's `globalStorage` directory; legacy data is migrated automatically on first run.
-- Forked from `osxzxso/extension-bookmarker` (1.0.2).
+## Support
 
-<sub>view CHANGELOG for full history</sub>
-
-Support
--------
 If you encounter any problems or have suggestions for Extensions Bookmark, feel free to open an issue on the [GitHub repository](https://github.com/jaypume/extensions-bookmark). Your feedback is always welcome and appreciated!

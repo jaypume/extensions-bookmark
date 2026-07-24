@@ -125,6 +125,11 @@ function activate(context) {
         }
     }));
 
+    // Command to refresh the bookmark tree view (re-read from the store)
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.refresh', () => {
+        bookmarkDataProvider.refresh();
+    }));
+
     // Command to add a bookmark
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.addBookmark', async () => {
         const categories = store.get('categories', []);

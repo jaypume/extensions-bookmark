@@ -31,6 +31,7 @@ let file = null; // absolute path to the data file, set by init()
 
 function init(context) {
     file = path.join(context.globalStorageUri.fsPath, DATA_FILE);
+    console.log('[extensions-bookmark] store path:', file);
 }
 
 /** Read+normalize the whole state, falling back to defaults. */
@@ -77,7 +78,10 @@ function update(key, value /*, target ignored */) {
  * resolves, so reads are safe immediately after.
  */
 function migrate() {
-    if (!file || fs.existsSync(file)) return Promise.resolve(); // already initialized
+    if (!file || fs.existsSync(file)) {
+        console.log('[extensions-bookmark] migrate: skip (already initialized)');
+        return Promise.resolve(); // already initialized
+    }
 
     // Legacy data was stored under the 'extension-bookmarker' config section
     // (the original fork's id). Keep this literal so existing settings.json
@@ -89,6 +93,9 @@ function migrate() {
         const v = cfg.get(k, undefined);
         if (v !== undefined) { legacy[k] = v; hasLegacy = true; }
     }
+    console.log('[extensions-bookmark] migrate:', hasLegacy
+        ? `found legacy data (${Object.keys(legacy).join(', ')})`
+        : 'no legacy data, seeding defaults');
     write(normalize(hasLegacy ? legacy : {}));
     return hasLegacy ? clearLegacy(cfg) : Promise.resolve();
 }
