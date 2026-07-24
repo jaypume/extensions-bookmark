@@ -4,10 +4,94 @@ const fs = require('fs');
 const path = require('path');
 const store = require('./store');
 
+// Runtime set of installed extension ids (lowercased) for status detection.
+function computeInstalledSet() {
+    return new Set(vscode.extensions.all.map(e => e.id.toLowerCase()));
+}
+
+// Determine the 4-state status of a bookmark vs. actual install state.
+// wantedInstall is optional (defaults to true for backward compat).
+function decorateBookmark(bookmark, installedSet) {
+    const want = bookmark.wantedInstall !== false; // true unless explicitly false
+    const actual = installedSet.has(String(bookmark.id).toLowerCase());
+    let status;
+    if (want) {
+        status = actual ? 'ok-installed' : 'want-install';
+    } else {
+        status = actual ? 'want-uninstall' : 'ok-uninstalled';
+    }
+    return { bookmark, want, actual, status };
+}
+
+// Status → { icon, color, desc }. desc is shown on the right (emoji marker).
+// icon/color only used when a bookmark has no marketplace icon of its own.
+const STATUS_VISUALS = {
+    'ok-installed':    { codicon: 'check',       color: 'testing.iconPassed',    desc: '✅' },
+    'want-install':    { codicon: 'arrow-down',  color: 'editorInfo.foreground', desc: '⚠️' },
+    'want-uninstall':  { codicon: 'x',           color: 'editorError.foreground', desc: '🗑️' },
+    'ok-uninstalled':  { codicon: 'check',       color: 'testing.iconPassed',    desc: '' }
+};
+
+function sortBookmarks(list, sortingOption) {
+    switch (sortingOption) {
+        case 'A-Z':
+            return list.sort((a, b) => a.displayName.localeCompare(b.displayName));
+        case 'Z-A':
+            return list.sort((a, b) => b.displayName.localeCompare(a.displayName));
+        case 'New-Old':
+            return list.sort((a, b) => new Date(b.dateAdded) - new Date(a.dateAdded));
+        case 'Old-New':
+            return list.sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded));
+        default:
+            return list.sort((a, b) => a.displayName.localeCompare(b.displayName));
+    }
+}
+
+function passesFilter(d, statusFilter) {
+    switch (statusFilter) {
+        case 'installed':  return d.actual;
+        case 'not-wanted': return d.want === false;
+        case 'diff':       return d.status === 'want-install' || d.status === 'want-uninstall';
+        case 'all':
+        default:           return true;
+    }
+}
+
+function toBookmarkTreeItem(d) {
+    const bookmark = d.bookmark;
+    const treeItem = new vscode.TreeItem(bookmark.displayName);
+    let details = `ID: ${bookmark.id}\nName: ${bookmark.displayName}\nCategory: ${bookmark.category}\nExpected: ${d.want ? 'wanted' : 'not wanted'}`;
+    if (bookmark.tags && bookmark.tags.length > 0) {
+        details += `\nTags: ${bookmark.tags.sort().join(', ')}`; // Sort tags A-Z
+    }
+    details += `\nAdded: ${bookmark.dateAdded}\n\nDownloads: ${bookmark.downloadCount}\nRating: ${bookmark.rating}\nUpdated: ${bookmark.lastUpdate}`;
+    if (bookmark.note) {
+        details += `\n\nNote: ${bookmark.note}`;
+    }
+    treeItem.tooltip = details;
+    treeItem.description = STATUS_VISUALS[d.status].desc;
+    treeItem.command = {
+        command: 'extensions-bookmark.showDetails',
+        arguments: [bookmark.id],
+        title: 'Show Details'
+    };
+    treeItem.contextValue = 'bookmarkedExtension';
+    // Prefer the bookmark's marketplace icon; otherwise use a colored status icon.
+    if (bookmark.icon) {
+        treeItem.iconPath = vscode.Uri.parse(bookmark.icon);
+    } else {
+        const v = STATUS_VISUALS[d.status];
+        treeItem.iconPath = new vscode.ThemeIcon(v.codicon, new vscode.ThemeColor(v.color));
+    }
+    return treeItem;
+}
+
 class BookmarkDataProvider {
     constructor() {
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
+        this.viewMode = store.get('viewMode', 'by-category');
+        this.statusFilter = store.get('statusFilter', 'all');
     }
 
     refresh() {
@@ -22,59 +106,264 @@ class BookmarkDataProvider {
         const categories = store.get('categories', []);
         const bookmarks = store.get('bookmarks', []);
         const sortingOption = store.get('sortingOption', 'A-Z');
+        const installedSet = computeInstalledSet();
+
+        const decorate = (bm) => decorateBookmark(bm, installedSet);
+        const visible = (d) => passesFilter(d, this.statusFilter);
 
         if (element) {
-            let bookmarksInCategory = bookmarks.filter(bookmark => bookmark.category === element.label);
-            switch (sortingOption) {
-                case 'A-Z':
-                    bookmarksInCategory.sort((a, b) => a.displayName.localeCompare(b.displayName));
-                    break;
-                case 'Z-A':
-                    bookmarksInCategory.sort((a, b) => b.displayName.localeCompare(a.displayName));
-                    break;
-                case 'New-Old':
-                    bookmarksInCategory.sort((a, b) => new Date(b.dateAdded) - new Date(a.dateAdded));
-                    break;
-                case 'Old-New':
-                    bookmarksInCategory.sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded));
-                    break;
+            let inGroup;
+            if (element.contextValue === 'statusGroup') {
+                // Grouped by status: filter by the group's bucket key.
+                inGroup = bookmarks
+                    .map(decorate)
+                    .filter(d => {
+                        if (!visible(d)) return false;
+                        if (element.statusKey === '__wanted__')    return d.want === true;
+                        if (element.statusKey === '__notwanted__') return d.want === false;
+                        return d.status === 'want-install' || d.status === 'want-uninstall';
+                    });
+            } else {
+                // Grouped by category.
+                inGroup = bookmarks
+                    .filter(bm => bm.category === element.label)
+                    .map(decorate)
+                    .filter(visible);
             }
-            return bookmarksInCategory.map(bookmark => {
-                let treeItem = new vscode.TreeItem(bookmark.displayName);
-                let details = `ID: ${bookmark.id}\nName: ${bookmark.displayName}\nCategory: ${bookmark.category}`;
-                if (bookmark.tags && bookmark.tags.length > 0) {
-                    details += `\nTags: ${bookmark.tags.sort().join(', ')}`; // Sort tags A-Z
+            // Sort by status priority (wanted&installed → diff → unwanted),
+            // then by the user's chosen sorting option within each tier.
+            const statusRank = (d) => {
+                if (d.status === 'ok-installed')   return 0; // wanted & installed
+                if (d.status === 'want-install')   return 1; // diff: to install
+                if (d.status === 'want-uninstall') return 1; // diff: to remove
+                return 2;                                    // unwanted (ok-uninstalled)
+            };
+            const tierKey = (d) => statusRank(d);
+            // Secondary sort key mirrors sortBookmarks but on decorated items.
+            const secondary = (a, b) => {
+                const da = a.bookmark, db = b.bookmark;
+                switch (sortingOption) {
+                    case 'Z-A':      return db.displayName.localeCompare(da.displayName);
+                    case 'New-Old':  return new Date(db.dateAdded) - new Date(da.dateAdded);
+                    case 'Old-New':  return new Date(da.dateAdded) - new Date(db.dateAdded);
+                    case 'A-Z':
+                    default:         return da.displayName.localeCompare(db.displayName);
                 }
-                details += `\nAdded: ${bookmark.dateAdded}\n\nDownloads: ${bookmark.downloadCount}\nRating: ${bookmark.rating}\nUpdated: ${bookmark.lastUpdate}`;
-                if (bookmark.note) {
-                    details += `\n\nNote: ${bookmark.note}`;
-                }
-                treeItem.tooltip = details;
-                treeItem.command = {
-                    command: 'extensions-bookmark.openExtension',
-                    arguments: [bookmark.id],
-                    title: 'Open Extension'
-                };
-                treeItem.contextValue = 'bookmarkedExtension';
-                treeItem.iconPath = bookmark.icon ? vscode.Uri.parse(bookmark.icon) : new vscode.ThemeIcon('bookmark');
-                return treeItem;
-            });
-        } else {
-            // Sort categories alphabetically, but keep 'Default' at the top
-            const sortedCategories = categories.sort((a, b) => {
-                if (a === 'Default') return -1;
-                if (b === 'Default') return 1;
-                return a.localeCompare(b);
-            });
+            };
+            return inGroup.slice().sort((a, b) => {
+                const r = tierKey(a) - tierKey(b);
+                return r !== 0 ? r : secondary(a, b);
+            }).map(d => toBookmarkTreeItem(d));
+        }
 
-            return sortedCategories.map(category => {
-                let treeItem = new vscode.TreeItem(category, vscode.TreeItemCollapsibleState.Collapsed);
-                treeItem.contextValue = category === 'Default' ? 'defaultCategory' : 'category';
+        // Root level.
+        if (this.viewMode === 'flat') {
+            const flat = bookmarks.map(decorate).filter(visible);
+            return sortBookmarks(flat.map(d => d.bookmark), 'A-Z')
+                .map(bm => toBookmarkTreeItem(decorate(bm)));
+        }
+
+        if (this.viewMode === 'by-status') {
+            // Three fixed buckets, always shown (even if empty).
+            // Wanted = expected to install; Not Wanted = expected to uninstall;
+            // Diff = expectation != actual (subset shown in both above).
+            const buckets = [
+                { label: 'Wanted',     key: '__wanted__' },
+                { label: 'Not Wanted', key: '__notwanted__' },
+                { label: 'Diff',       key: '__diff__' }
+            ];
+            return buckets.map(b => {
+                const inBucket = (d) => {
+                    if (b.key === '__wanted__')    return d.want === true;
+                    if (b.key === '__notwanted__') return d.want === false;
+                    return d.status === 'want-install' || d.status === 'want-uninstall';
+                };
+                const count = bookmarks.map(decorate).filter(d => visible(d) && inBucket(d)).length;
+                const treeItem = new vscode.TreeItem(`${b.label} (${count})`, vscode.TreeItemCollapsibleState.Collapsed);
+                treeItem.contextValue = 'statusGroup';
+                treeItem.statusKey = b.key;
                 return treeItem;
             });
         }
+
+        // by-category root: category list, 'Default' pinned first.
+        const sortedCategories = categories.sort((a, b) => {
+            if (a === 'Default') return -1;
+            if (b === 'Default') return 1;
+            return a.localeCompare(b);
+        });
+        return sortedCategories.map(category => {
+            let treeItem = new vscode.TreeItem(category, vscode.TreeItemCollapsibleState.Collapsed);
+            treeItem.contextValue = category === 'Default' ? 'defaultCategory' : 'category';
+            return treeItem;
+        });
     }
 }
+
+// Webview view that renders a details card for the selected bookmark.
+class DetailsViewProvider {
+    constructor(context, bookmarkDataProvider) {
+        this.context = context;
+        this.bookmarkDataProvider = bookmarkDataProvider;
+        this.view = null;
+        this.bookmarkId = null;
+        this.assets = null;
+    }
+
+    resolveWebviewView(view) {
+        this.view = view;
+        const nk = (p) => view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, ...p)).toString();
+        this.assets = {
+            codiconTtf: nk(['node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf'])
+        };
+        view.webview.options = { enableScripts: true };
+        view.webview.html = this._renderEmpty();
+        view.webview.onDidReceiveMessage(async (msg) => {
+            if (msg && msg.type === 'saveNote' && this.bookmarkId) {
+                const bookmarks = store.get('bookmarks', []);
+                const bm = bookmarks.find(b => b.id === this.bookmarkId);
+                if (bm) {
+                    bm.note = msg.value;
+                    store.update('bookmarks', bookmarks);
+                    this.bookmarkDataProvider.refresh();
+                }
+            } else if (msg && msg.type === 'openMarket' && msg.id) {
+                vscode.commands.executeCommand('extension.open', msg.id);
+            }
+        });
+    }
+
+    show(bookmarkId) {
+        this.bookmarkId = bookmarkId;
+        if (this.view) {
+            const bookmarks = store.get('bookmarks', []);
+            const bookmark = bookmarks.find(b => b.id === bookmarkId);
+            if (bookmark) this.view.webview.html = this._renderCard(bookmark);
+            this.view.show?.(true);
+        }
+    }
+
+    // Shared <head>: codicons font (self-declared with absolute webview URI
+    // so the relative path in codicon.css resolves correctly) + base CSS.
+    _head() {
+        const a = this.assets || {};
+        return `<meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          @font-face {
+            font-family: "codicon";
+            font-display: block;
+            src: url("${a.codiconTtf}") format("truetype");
+          }
+          ${DETAILS_CSS}
+        </style>`;
+    }
+
+    _renderEmpty() {
+        return `<!DOCTYPE html><html><head>${this._head()}</head>
+        <body><div class="empty">Select a bookmark to view details.</div></body></html>`;
+    }
+
+    _renderCard(bm) {
+        const installedSet = computeInstalledSet();
+        const d = decorateBookmark(bm, installedSet);
+        const esc = (s) => String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const iconHtml = bm.icon
+            ? `<img class="icon" src="${esc(bm.icon)}" alt="">`
+            : `<div class="icon icon-placeholder"></div>`;
+        const tags = (bm.tags && bm.tags.length) ? bm.tags.slice().sort().join(', ') : '—';
+        const wantIco = d.want ? 'codicon-check' : 'codicon-close';
+        const wantLabel = d.want ? 'Wanted' : 'Not wanted';
+        const wantCls = d.want ? 'st-ok' : 'st-bad';
+        const actualIco = d.actual ? 'codicon-passed' : 'codicon-circle-slash';
+        const actualLabel = d.actual ? 'Installed' : 'Not installed';
+        const actualCls = d.actual ? 'st-ok' : 'st-mute';
+        const tableRow = (k, v) => `<tr><td class="k">${k}</td><td class="v">${esc(v)}</td></tr>`;
+        return `<!DOCTYPE html><html><head>${this._head()}</head>
+        <body>
+        <div class="card">
+          <header class="head">
+            ${iconHtml}
+            <div class="title">
+              <div class="name">${esc(bm.displayName)}</div>
+                  <div class="id">${esc(bm.id)}</div>
+            </div>
+          </header>
+
+          <div class="status">
+            <span class="status-chip ${wantCls}">
+              <span class="codicon ${wantIco}"></span><span>${wantLabel}</span>
+            </span>
+            <span class="status-chip ${actualCls}">
+              <span class="codicon ${actualIco}"></span><span>${actualLabel}</span>
+            </span>
+          </div>
+
+          <table class="grid">
+            <tbody>
+              ${tableRow('Category', bm.category)}
+              ${tableRow('Tags', tags)}
+              ${tableRow('Added', bm.dateAdded)}
+              ${tableRow('Downloads', bm.downloadCount || '—')}
+              ${tableRow('Rating', bm.rating || '—')}
+              ${tableRow('Updated', bm.lastUpdate || '—')}
+            </tbody>
+          </table>
+
+          <div class="note-wrap">
+            <label class="note-label" for="note">Note</label>
+            <textarea id="note" placeholder="Add a personal note…">${esc(bm.note || '')}</textarea>
+          </div>
+
+          <button id="openMarket" class="btn">
+            <span class="codicon codicon-extensions"></span>
+            <span>Open in Marketplace</span>
+          </button>
+        </div>
+        <script>
+          const vscode = acquireVsCodeApi();
+          const ta = document.getElementById('note');
+          ta.addEventListener('blur', () => vscode.postMessage({ type: 'saveNote', value: ta.value }));
+          document.getElementById('openMarket').addEventListener('click', () => {
+            vscode.postMessage({ type: 'openMarket', id: ${JSON.stringify(bm.id)} });
+          });
+        </script>
+        </body></html>`;
+    }
+}
+
+const DETAILS_CSS = `
+  body { margin: 0; padding: 16px 20px; color: var(--vscode-foreground); background: var(--vscode-sideBar-background); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }
+  .codicon { font: normal normal normal 16px/1 codicon; display: inline-block; }
+  .empty { color: var(--vscode-descriptionForeground); padding: 8px 0; }
+  .card { display: flex; flex-direction: column; gap: 16px; }
+  .head { display: flex; align-items: center; gap: 14px; }
+  .icon { width: 56px; height: 56px; object-fit: contain; flex-shrink: 0; background: var(--vscode-editorWidget-background); border-radius: 6px; padding: 4px; box-sizing: border-box; }
+  .icon-placeholder { background: var(--vscode-editorWidget-background); }
+  .title { flex: 1; min-width: 0; }
+  .name { font-weight: 600; word-break: break-word; }
+  .id { color: var(--vscode-descriptionForeground); font-size: 0.85em; margin-top: 2px; }
+  .status { display: flex; flex-wrap: wrap; gap: 10px; }
+  .status-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.9em; }
+  .status-chip .codicon { font-size: 1em; }
+  .st-ok { color: var(--vscode-testing-iconPassed); }
+  .st-bad { color: var(--vscode-errorForeground); }
+  .st-mute { color: var(--vscode-descriptionForeground); }
+  table.grid { width: 100%; border-collapse: collapse; border-spacing: 0; }
+  table.grid td { padding: 4px 0; vertical-align: top; border: none; }
+  table.grid tr { border-bottom: 1px solid var(--vscode-editorWidget-border, rgba(128,128,128,0.15)); }
+  table.grid tr:last-child { border-bottom: none; }
+  td.k { color: var(--vscode-descriptionForeground); white-space: nowrap; padding-right: 12px; }
+  td.v { text-align: right; word-break: break-word; }
+  .note-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .note-label { font-size: 0.85em; color: var(--vscode-descriptionForeground); }
+  textarea { width: 100%; min-height: 90px; resize: vertical; box-sizing: border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px; padding: 8px; font-family: inherit; font-size: inherit; }
+  textarea:focus { outline: none; border-color: var(--vscode-focusBorder); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; width: 100%; justify-content: center; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; border-radius: 2px; padding: 6px 12px; font-family: inherit; font-size: inherit; cursor: pointer; }
+  .btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
+  .btn .codicon { font-size: 1em; }
+`;
 
 function activate(context) {
     // Backing store: standalone JSON file under globalStorage, migrated from
@@ -85,6 +374,16 @@ function activate(context) {
 
     const bookmarkDataProvider = new BookmarkDataProvider();
     vscode.window.registerTreeDataProvider('extensionsBookmarkView', bookmarkDataProvider);
+
+    const detailsProvider = new DetailsViewProvider(context, bookmarkDataProvider);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider('extensionsBookmarkDetails', detailsProvider)
+    );
+
+    // Sync the view-mode context key so the toggle button shows the right icon.
+    vscode.commands.executeCommand('setContext', 'extensions-bookmark.viewMode', bookmarkDataProvider.viewMode);
+    // Reflect external install/uninstall changes automatically.
+    context.subscriptions.push(vscode.extensions.onDidChange(() => bookmarkDataProvider.refresh()));
 
     // Initialize categories if not already initialized
     let categories = store.get('categories', []);
@@ -100,7 +399,7 @@ function activate(context) {
 
     // Command to select adding a bookmark, adding a category, search, import or export, filter, sort, remove all data
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.add', async () => {
-        const options = ['Add Bookmark', 'Add Category', 'Add Tag', 'Rename Tag', 'Remove Tag', 'Sort Bookmarks', 'Filter Bookmarks', 'Import Data', 'Export Data', 'Remove All Data'];
+        const options = ['Add Bookmark', 'Add Category', 'Add Tag', 'Rename Tag', 'Remove Tag', 'Sort Bookmarks', 'Filter Bookmarks', 'Sync to Data', 'Sync from Data', 'Import Data', 'Export Data', 'Remove All Data'];
         const selectedOption = await vscode.window.showQuickPick(options, { placeHolder: 'Select an option' });
         if (selectedOption === options[0]) {
             vscode.commands.executeCommand('extensions-bookmark.addBookmark');
@@ -117,10 +416,14 @@ function activate(context) {
         } else if (selectedOption === options[6]) {
             vscode.commands.executeCommand('extensions-bookmark.filterByTag');
         } else if (selectedOption === options[7]) {
-            vscode.commands.executeCommand('extensions-bookmark.importData');
+            vscode.commands.executeCommand('extensions-bookmark.syncToData');
         } else if (selectedOption === options[8]) {
-            vscode.commands.executeCommand('extensions-bookmark.exportData');
+            vscode.commands.executeCommand('extensions-bookmark.syncFromData');
         } else if (selectedOption === options[9]) {
+            vscode.commands.executeCommand('extensions-bookmark.importData');
+        } else if (selectedOption === options[10]) {
+            vscode.commands.executeCommand('extensions-bookmark.exportData');
+        } else if (selectedOption === options[11]) {
             vscode.commands.executeCommand('extensions-bookmark.removeAllData');
         }
     }));
@@ -128,6 +431,165 @@ function activate(context) {
     // Command to refresh the bookmark tree view (re-read from the store)
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.refresh', () => {
         bookmarkDataProvider.refresh();
+    }));
+
+    // Cycle view modes: by-category → by-status → flat → by-category.
+    function setViewMode(mode) {
+        bookmarkDataProvider.viewMode = mode;
+        store.update('viewMode', mode);
+        vscode.commands.executeCommand('setContext', 'extensions-bookmark.viewMode', mode);
+        bookmarkDataProvider.refresh();
+    }
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.switchToByStatus', () => setViewMode('by-status')));
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.switchToFlat', () => setViewMode('flat')));
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.switchToByCategory', () => setViewMode('by-category')));
+
+    // Filter bookmarks by install/wanted status.
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.filterStatus', async () => {
+        const options = [
+            { label: 'All', value: 'all' },
+            { label: 'Installed', value: 'installed' },
+            { label: 'Expected to Uninstall', value: 'not-wanted' },
+            { label: 'Diff Only (out of sync)', value: 'diff' }
+        ];
+        const picked = await vscode.window.showQuickPick(options, { placeHolder: 'Filter bookmarks by status' });
+        if (!picked) return;
+        bookmarkDataProvider.statusFilter = picked.value;
+        store.update('statusFilter', picked.value);
+        bookmarkDataProvider.refresh();
+    }));
+
+    // Toggle a bookmark's wantedInstall flag (wanted ↔ not wanted).
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.toggleWanted', (item) => {
+        const id = item && item.command && item.command.arguments && item.command.arguments[0];
+        if (!id) return;
+        const bookmarks = store.get('bookmarks', []);
+        const bookmark = bookmarks.find(b => b.id === id);
+        if (!bookmark) return;
+        bookmark.wantedInstall = bookmark.wantedInstall === false;
+        store.update('bookmarks', bookmarks);
+        bookmarkDataProvider.refresh();
+        vscode.window.showInformationMessage(`${bookmark.displayName}: ${bookmark.wantedInstall === false ? 'not wanted' : 'wanted'}`);
+    }));
+
+    // Sync helpers — install/uninstall based on wantedInstall vs actual status.
+    function isInstalled(id) {
+        return vscode.extensions.all.some(e => e.id.toLowerCase() === String(id).toLowerCase());
+    }
+
+    async function applySync(bookmark) {
+        const want = bookmark.wantedInstall !== false;
+        const actual = isInstalled(bookmark.id);
+        if (want && !actual) {
+            await vscode.commands.executeCommand('workbench.extensions.installExtension', bookmark.id);
+            return 'installed';
+        }
+        if (!want && actual) {
+            await vscode.commands.executeCommand('workbench.extensions.uninstallExtension', bookmark.id);
+            return 'uninstalled';
+        }
+        return 'noop';
+    }
+
+    // Refresh progressively after an install/uninstall: vscode.extensions.all
+    // updates asynchronously and can lag by several seconds, so a single
+    // refresh leaves stale status (e.g. a "to remove" item stuck in Diff).
+    function refreshAfterSync() {
+        bookmarkDataProvider.refresh();
+        [1000, 2000, 4000].forEach(ms => setTimeout(() => bookmarkDataProvider.refresh(), ms));
+    }
+
+    // Sync a single bookmark from its context menu.
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.syncExtension', async (item) => {
+        const id = item && item.command && item.command.arguments && item.command.arguments[0];
+        if (!id) return;
+        const bookmark = store.get('bookmarks', []).find(b => b.id === id);
+        if (!bookmark) return;
+        try {
+            const result = await applySync(bookmark);
+            if (result === 'noop') {
+                vscode.window.showInformationMessage(`${bookmark.displayName}: already in sync`);
+            } else if (result === 'uninstalled') {
+                // Uninstall may not fully reflect until the window reloads.
+                const reload = 'Reload Window';
+                const choice = await vscode.window.showInformationMessage(
+                    `${bookmark.displayName}: uninstalled. Reload window to fully apply?`, reload);
+                if (choice === reload) {
+                    vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }
+            } else {
+                vscode.window.showInformationMessage(`${bookmark.displayName}: ${result}`);
+            }
+            refreshAfterSync();
+        } catch (e) {
+            vscode.window.showErrorMessage(`Sync failed for ${bookmark.displayName}: ${e.message || e}`);
+        }
+    }));
+
+    // Sync to Data: write current actual install state into data.json.
+    // Each bookmark's wantedInstall = whether it is currently installed.
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.syncToData', async () => {
+        const bookmarks = store.get('bookmarks', []);
+        let installedCount = 0;
+        for (const bm of bookmarks) {
+            const actual = isInstalled(bm.id);
+            bm.wantedInstall = actual;
+            if (actual) installedCount++;
+        }
+        store.update('bookmarks', bookmarks);
+        bookmarkDataProvider.refresh();
+        vscode.window.showInformationMessage(
+            `Synced to data: ${installedCount}/${bookmarks.length} installed.`
+        );
+    }));
+
+    // Sync from Data: install/uninstall to match data.json's wantedInstall.
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.syncFromData', async () => {
+        const bookmarks = store.get('bookmarks', []);
+        const needInstall = [];
+        const needUninstall = [];
+        for (const bm of bookmarks) {
+            const want = bm.wantedInstall !== false;
+            const actual = isInstalled(bm.id);
+            if (want && !actual) needInstall.push(bm);
+            if (!want && actual) needUninstall.push(bm);
+        }
+        const total = needInstall.length + needUninstall.length;
+        if (total === 0) {
+            vscode.window.showInformationMessage('Everything is in sync.');
+            return;
+        }
+        let done = 0, failed = 0;
+        await vscode.window.withProgress(
+            { location: vscode.ProgressLocation.Notification, title: 'Syncing extensions', cancellable: false },
+            async (progress) => {
+                const run = async (bm, action) => {
+                    progress.report({ increment: (1 / total) * 100, message: `${action} ${bm.displayName}…` });
+                    try {
+                        await applySync(bm);
+                    } catch (e) {
+                        failed++;
+                        console.warn(`[extensions-bookmark] sync ${action} failed for ${bm.id}:`, e);
+                    }
+                    done++;
+                };
+                // Install all first, then uninstall (re-checking state each time).
+                for (const bm of needInstall) await run(bm, 'Installing');
+                for (const bm of needUninstall) await run(bm, 'Removing');
+            }
+        );
+        const msg = `Sync complete: ${done - failed}/${total} ok${failed ? `, ${failed} failed` : ''}.`;
+        if (needUninstall.length > 0) {
+            // Uninstalls may not fully reflect until the window reloads.
+            const reload = 'Reload Window';
+            const choice = await vscode.window.showInformationMessage(`${msg} Reload window to fully apply uninstalls?`, reload);
+            if (choice === reload) {
+                vscode.commands.executeCommand('workbench.action.reloadWindow');
+            }
+        } else {
+            vscode.window.showInformationMessage(msg);
+        }
+        refreshAfterSync();
     }));
 
     // Command to add a bookmark
@@ -170,7 +632,7 @@ function activate(context) {
                         let rating = ratingStat ? ratingStat.value.toFixed(1) : 'N/A';
                         let dateAdded = new Date().toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
                         let lastUpdate = new Date(extensionData.versions[0].lastUpdated).toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
-                        bookmarks.push({ id: selectedExtension, displayName: displayName, icon: icon, category: selectedCategory, dateAdded: dateAdded, downloadCount: downloadCount, rating: rating, lastUpdate: lastUpdate });
+                        bookmarks.push({ id: selectedExtension, displayName: displayName, icon: icon, category: selectedCategory, dateAdded: dateAdded, downloadCount: downloadCount, rating: rating, lastUpdate: lastUpdate, wantedInstall: true });
                         await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
                         bookmarkDataProvider.refresh();
                         vscode.window.showInformationMessage(`Extension ${selectedExtension} has been bookmarked.`);
@@ -199,7 +661,12 @@ function activate(context) {
 
     // Command to open a bookmarked extension in the Extensions view
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.openExtension', (extensionId) => {
-        vscode.commands.executeCommand('workbench.extensions.search', extensionId);
+        vscode.commands.executeCommand('extension.open', extensionId);
+    }));
+
+    // Show the details card for a bookmark (single click + viewDetails).
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.showDetails', (extensionId) => {
+        if (extensionId) detailsProvider.show(extensionId);
     }));
 
     // Command to remove a bookmark
@@ -693,26 +1160,16 @@ function activate(context) {
     // Command to view a bookmark's details - text document
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.viewDetails', async (item) => {
         const bookmarks = store.get('bookmarks', []);
-        let bookmark;
+        let id;
         if (item) {
-            bookmark = bookmarks.find(bookmark => bookmark.id === item.command.arguments[0]);
+            id = item.command.arguments[0];
         } else {
-            const sortedBookmarks = bookmarks.sort((a, b) => a.displayName.localeCompare(b.displayName)); // Sort bookmarks A-Z
+            const sortedBookmarks = bookmarks.slice().sort((a, b) => a.displayName.localeCompare(b.displayName)); // Sort bookmarks A-Z
             const selectedBookmark = await vscode.window.showQuickPick(sortedBookmarks.map(bookmark => bookmark.displayName), { placeHolder: 'Select a bookmark to view details' });
-            bookmark = bookmarks.find(bookmark => bookmark.displayName === selectedBookmark);
+            const bookmark = bookmarks.find(bookmark => bookmark.displayName === selectedBookmark);
+            id = bookmark && bookmark.id;
         }
-        if (bookmark) {
-            let details = `ID: ${bookmark.id}\nName: ${bookmark.displayName}\nCategory: ${bookmark.category}`;
-            if (bookmark.tags && bookmark.tags.length > 0) {
-                details += `\nTags: ${bookmark.tags.sort().join(', ')}`; // Sort tags A-Z
-            }
-            details += `\nAdded: ${bookmark.dateAdded}\n\nDownloads: ${bookmark.downloadCount}\nRating: ${bookmark.rating}\nUpdated: ${bookmark.lastUpdate}`;
-            if (bookmark.note) {
-                details += `\n\nNote: ${bookmark.note}`;
-            }
-            const document = await vscode.workspace.openTextDocument({ content: details, language: 'markdown' });
-            await vscode.window.showTextDocument(document);
-        }
+        if (id) detailsProvider.show(id);
     }));
 
     // Command to import data

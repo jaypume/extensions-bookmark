@@ -26,6 +26,14 @@
     "onCommand:extensions-bookmark.moveBookmark",
     "onCommand:extensions-bookmark.searchBookmarks",
     "onCommand:extensions-bookmark.refresh",
+    "onCommand:extensions-bookmark.switchToByStatus",
+    "onCommand:extensions-bookmark.switchToFlat",
+    "onCommand:extensions-bookmark.switchToByCategory",
+    "onCommand:extensions-bookmark.filterStatus",
+    "onCommand:extensions-bookmark.syncToData",
+    "onCommand:extensions-bookmark.syncFromData",
+    "onCommand:extensions-bookmark.toggleWanted",
+    "onCommand:extensions-bookmark.syncExtension",
     "onCommand:extensions-bookmark.addTagToList",
     "onCommand:extensions-bookmark.renameTagInList",
     "onCommand:extensions-bookmark.removeTagFromList",
@@ -37,6 +45,7 @@
     "onCommand:extensions-bookmark.editNote",
     "onCommand:extensions-bookmark.removeNote",
     "onCommand:extensions-bookmark.viewDetails",
+    "onCommand:extensions-bookmark.showDetails",
     "onCommand:extensions-bookmark.importData",
     "onCommand:extensions-bookmark.exportData",
     "onCommand:extensions-bookmark.removeAllData",
@@ -58,6 +67,11 @@
         {
           "id": "extensionsBookmarkView",
           "name": "List"
+        },
+        {
+          "id": "extensionsBookmarkDetails",
+          "name": "Details",
+          "type": "webview"
         }
       ]
     },
@@ -135,6 +149,14 @@
         "title": "View Details"
       },
       {
+        "command": "extensions-bookmark.showDetails",
+        "title": "Show Details"
+      },
+      {
+        "command": "extensions-bookmark.openExtension",
+        "title": "Open in Marketplace"
+      },
+      {
         "command": "extensions-bookmark.importData",
         "title": "Import Data"
       },
@@ -166,6 +188,42 @@
         "command": "extensions-bookmark.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "extensions-bookmark.switchToByStatus",
+        "title": "Group by Status",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "extensions-bookmark.switchToFlat",
+        "title": "Flat View",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "extensions-bookmark.switchToByCategory",
+        "title": "Group by Category",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "extensions-bookmark.filterStatus",
+        "title": "Filter by Status",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "extensions-bookmark.syncToData",
+        "title": "Sync to Data (from Installed)"
+      },
+      {
+        "command": "extensions-bookmark.syncFromData",
+        "title": "Sync from Data (to Installed)"
+      },
+      {
+        "command": "extensions-bookmark.toggleWanted",
+        "title": "Toggle Wanted / Not Wanted"
+      },
+      {
+        "command": "extensions-bookmark.syncExtension",
+        "title": "Sync (Install or Uninstall)"
       }
     ],
     "menus": {
@@ -182,6 +240,26 @@
         },
         {
           "command": "extensions-bookmark.refresh",
+          "group": "navigation",
+          "when": "view == extensionsBookmarkView"
+        },
+        {
+          "command": "extensions-bookmark.switchToByStatus",
+          "group": "navigation",
+          "when": "view == extensionsBookmarkView && extensions-bookmark.viewMode == 'by-category'"
+        },
+        {
+          "command": "extensions-bookmark.switchToFlat",
+          "group": "navigation",
+          "when": "view == extensionsBookmarkView && extensions-bookmark.viewMode == 'by-status'"
+        },
+        {
+          "command": "extensions-bookmark.switchToByCategory",
+          "group": "navigation",
+          "when": "view == extensionsBookmarkView && extensions-bookmark.viewMode == 'flat'"
+        },
+        {
+          "command": "extensions-bookmark.filterStatus",
           "group": "navigation",
           "when": "view == extensionsBookmarkView"
         }
@@ -236,6 +314,21 @@
           "command": "extensions-bookmark.viewDetails",
           "group": "0_extension_bookmarker",
           "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
+        },
+        {
+          "command": "extensions-bookmark.openExtension",
+          "group": "0_extension_bookmarker",
+          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
+        },
+        {
+          "command": "extensions-bookmark.toggleWanted",
+          "group": "0_extension_bookmarker",
+          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
+        },
+        {
+          "command": "extensions-bookmark.syncExtension",
+          "group": "0_extension_bookmarker",
+          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
         }
       ]
     }
@@ -250,6 +343,7 @@
     "vscode": "^1.1.37"
   },
   "dependencies": {
+    "@vscode/codicons": "^0.0.46-24",
     "axios": "^1.4.0"
   }
 }

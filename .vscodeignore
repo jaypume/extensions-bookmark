@@ -39,3 +39,9 @@ node_modules/**
 !node_modules/proxy-from-env
 !node_modules/@tootallnate/**
 !node_modules/@tootallnate
+
+# Webview UI toolkit + codicons (used by the details card). Keep only dist/.
+!node_modules/@vscode/**
+!node_modules/@vscode
+!node_modules/@vscode/codicons/**
+!node_modules/@vscode/codicons

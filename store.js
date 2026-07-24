@@ -21,7 +21,9 @@ const DEFAULTS = {
     categories: ['Default'],
     bookmarks: [],
     tags: [],
-    sortingOption: 'A-Z'
+    sortingOption: 'A-Z',
+    viewMode: 'by-category',   // 'by-category' | 'by-status' | 'flat'
+    statusFilter: 'all'    // 'all' | 'installed' | 'not-wanted' | 'diff'
 };
 
 // Keys previously stored in settings.json; migrated once then cleared.
