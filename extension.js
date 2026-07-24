@@ -168,6 +168,8 @@ async function fetchMarketplaceBookmark(extensionId, category) {
 function toBookmarkTreeItem(d) {
     const bookmark = d.bookmark;
     const treeItem = new vscode.TreeItem(bookmark.displayName);
+    treeItem.bookmarkId = bookmark.id;
+    treeItem.category = bookmark.category;
     let details = `ID: ${bookmark.id}\nName: ${bookmark.displayName}\nCategory: ${bookmark.category}\nExpected: ${d.want ? 'wanted' : 'not wanted'}`;
     if (bookmark.tags && bookmark.tags.length > 0) {
         details += `\nTags: ${bookmark.tags.sort().join(', ')}`; // Sort tags A-Z
@@ -200,6 +202,8 @@ class BookmarkDataProvider {
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
         this.viewMode = store.get('viewMode', 'by-category');
         this.statusFilter = store.get('statusFilter', 'recent');
+        this.categoryItems = new Map();
+        this.bookmarkItems = new Map();
     }
 
     refresh() {
@@ -208,6 +212,39 @@ class BookmarkDataProvider {
 
     getTreeItem(element) {
         return element;
+    }
+
+    getParent(element) {
+        if (this.viewMode === 'by-category' && element?.contextValue === 'bookmarkedExtension') {
+            return this.getCategoryItem(element.category);
+        }
+        return undefined;
+    }
+
+    getCategoryItem(category) {
+        let treeItem = this.categoryItems.get(category);
+        if (!treeItem) {
+            treeItem = new vscode.TreeItem(category, vscode.TreeItemCollapsibleState.Collapsed);
+            treeItem.id = `category:${category}`;
+            treeItem.category = category;
+            this.categoryItems.set(category, treeItem);
+        }
+        treeItem.contextValue = category === 'Default' ? 'defaultCategory' : 'category';
+        return treeItem;
+    }
+
+    getBookmarkItem(bookmark, installedSet = computeInstalledSet(), scope = 'category') {
+        const bookmarkId = String(bookmark.id).toLowerCase();
+        const key = `${scope}:${bookmarkId}`;
+        const next = toBookmarkTreeItem(decorateBookmark(bookmark, installedSet));
+        next.id = `bookmark:${key}`;
+        const treeItem = this.bookmarkItems.get(key);
+        if (treeItem) {
+            Object.assign(treeItem, next);
+            return treeItem;
+        }
+        this.bookmarkItems.set(key, next);
+        return next;
     }
 
     async getChildren(element) {
@@ -222,7 +259,9 @@ class BookmarkDataProvider {
 
         if (element) {
             let inGroup;
+            let itemScope;
             if (element.contextValue === 'statusGroup') {
+                itemScope = `status:${element.statusKey}`;
                 // Grouped by status: filter by the group's bucket key.
                 inGroup = bookmarks
                     .map(decorate)
@@ -233,6 +272,7 @@ class BookmarkDataProvider {
                         return d.status === 'want-install' || d.status === 'want-uninstall';
                     });
             } else {
+                itemScope = `category:${element.label}`;
                 // Grouped by category.
                 inGroup = bookmarks
                     .filter(bm => bm.category === element.label)
@@ -262,14 +302,14 @@ class BookmarkDataProvider {
             return inGroup.slice().sort((a, b) => {
                 const r = tierKey(a) - tierKey(b);
                 return r !== 0 ? r : secondary(a, b);
-            }).map(d => toBookmarkTreeItem(d));
+            }).map(d => this.getBookmarkItem(d.bookmark, installedSet, itemScope));
         }
 
         // Root level.
         if (this.viewMode === 'flat') {
             const flat = bookmarks.map(decorate).filter(visible);
             return sortBookmarks(flat.map(d => d.bookmark), 'A-Z')
-                .map(bm => toBookmarkTreeItem(decorate(bm)));
+                .map(bm => this.getBookmarkItem(bm, installedSet, 'flat'));
         }
 
         if (this.viewMode === 'by-status') {
@@ -301,11 +341,7 @@ class BookmarkDataProvider {
             if (b === 'Default') return 1;
             return a.localeCompare(b);
         });
-        return sortedCategories.map(category => {
-            let treeItem = new vscode.TreeItem(category, vscode.TreeItemCollapsibleState.Collapsed);
-            treeItem.contextValue = category === 'Default' ? 'defaultCategory' : 'category';
-            return treeItem;
-        });
+        return sortedCategories.map(category => this.getCategoryItem(category));
     }
 }
 
@@ -326,7 +362,8 @@ class DetailsViewProvider {
             codiconTtf: nk(['node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf'])
         };
         view.webview.options = { enableScripts: true };
-        view.webview.html = this._renderEmpty();
+        const bookmark = store.get('bookmarks', []).find(b => b.id === this.bookmarkId);
+        view.webview.html = bookmark ? this._renderCard(bookmark) : this._renderEmpty();
         view.webview.onDidReceiveMessage(async (msg) => {
             if (msg && msg.type === 'saveNote' && this.bookmarkId) {
                 const bookmarks = store.get('bookmarks', []);
@@ -493,9 +530,10 @@ function activate(context) {
 
     const bookmarkDataProvider = new BookmarkDataProvider();
     logInfo('Registering List tree data provider');
-    context.subscriptions.push(
-        vscode.window.registerTreeDataProvider('extensionsBookmarkView', bookmarkDataProvider)
-    );
+    const bookmarkTreeView = vscode.window.createTreeView('extensionsBookmarkView', {
+        treeDataProvider: bookmarkDataProvider
+    });
+    context.subscriptions.push(bookmarkTreeView);
     logInfo('List tree data provider registered');
 
     const detailsProvider = new DetailsViewProvider(context, bookmarkDataProvider);
@@ -554,11 +592,40 @@ function activate(context) {
     }));
 
     // Cycle view modes: by-category → by-status → flat → by-category.
-    function setViewMode(mode) {
+    async function setViewMode(mode) {
         bookmarkDataProvider.viewMode = mode;
-        store.update('viewMode', mode);
-        vscode.commands.executeCommand('setContext', 'extensions-bookmark.viewMode', mode);
+        await store.update('viewMode', mode);
+        await vscode.commands.executeCommand('setContext', 'extensions-bookmark.viewMode', mode);
         bookmarkDataProvider.refresh();
+    }
+
+    async function locateBookmark(bookmarkId) {
+        const bookmarks = store.get('bookmarks', []);
+        const bookmark = bookmarks.find(b => b.id === bookmarkId);
+        if (!bookmark) return;
+
+        if (bookmarkDataProvider.viewMode !== 'by-category') {
+            await setViewMode('by-category');
+        }
+
+        const decorated = decorateBookmark(bookmark, computeInstalledSet());
+        if (!passesFilter(decorated, bookmarkDataProvider.statusFilter, getRecentHours())) {
+            bookmarkDataProvider.statusFilter = 'all';
+            await store.update('statusFilter', 'all');
+            bookmarkDataProvider.refresh();
+            logInfo(`Changed filter to All to reveal ${bookmark.id}`);
+        }
+
+        await vscode.commands.executeCommand('extensionsBookmarkView.focus');
+        const categoryItem = bookmarkDataProvider.getCategoryItem(bookmark.category);
+        await bookmarkTreeView.reveal(categoryItem, { expand: true });
+        const bookmarkItem = bookmarkDataProvider.getBookmarkItem(
+            bookmark,
+            undefined,
+            `category:${bookmark.category}`
+        );
+        await bookmarkTreeView.reveal(bookmarkItem, { select: true, focus: true });
+        detailsProvider.show(bookmark.id);
     }
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.switchToByStatus', () => setViewMode('by-status')));
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.switchToFlat', () => setViewMode('flat')));
@@ -1098,11 +1165,16 @@ function activate(context) {
                     .map(toItem);
             }
         });
-        quickPick.onDidAccept(() => {
+        quickPick.onDidAccept(async () => {
             const selectedBookmark = quickPick.selectedItems[0];
             if (selectedBookmark) {
                 logInfo(`Opening local details from search: ${selectedBookmark.bookmarkId}`);
-                detailsProvider.show(selectedBookmark.bookmarkId);
+                try {
+                    await locateBookmark(selectedBookmark.bookmarkId);
+                } catch (error) {
+                    logError(`Failed to locate bookmark ${selectedBookmark.bookmarkId}`, error);
+                    detailsProvider.show(selectedBookmark.bookmarkId);
+                }
             }
             quickPick.hide();
         });

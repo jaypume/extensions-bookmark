@@ -18,7 +18,7 @@ CURRENT VERSION - 1.1.0
 -----------------------
 ### CHANGES - released on 7/6/2023
 - Updated README.md file
-- Added/Removed exclusions from .gitignore and .vscodeignore files  
+- Added/Removed exclusions from .gitignore and .vscodeignore files
 
 1.0.0
 -----------------------
