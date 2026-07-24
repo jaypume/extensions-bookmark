@@ -1078,22 +1078,31 @@ function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.searchBookmarks', async () => {
         const bookmarks = store.get('bookmarks', []);
         const quickPick = vscode.window.createQuickPick();
-        quickPick.items = bookmarks.sort((a, b) => a.displayName.localeCompare(b.displayName)).map(bookmark => ({ label: bookmark.displayName }));
+        const toItem = bookmark => ({
+            label: bookmark.displayName,
+            description: bookmark.id,
+            bookmarkId: bookmark.id
+        });
+        quickPick.items = bookmarks.slice()
+            .sort((a, b) => a.displayName.localeCompare(b.displayName))
+            .map(toItem);
         quickPick.placeholder = 'Enter a bookmark name or select an existing one';
         quickPick.onDidChangeValue(value => {
             if (value) {
                 quickPick.items = bookmarks.filter(bookmark => bookmark.displayName.toLowerCase().includes(value.toLowerCase()))
                     .sort((a, b) => a.displayName.localeCompare(b.displayName))
-                    .map(bookmark => ({ label: bookmark.displayName }));
+                    .map(toItem);
             } else {
-                quickPick.items = bookmarks.sort((a, b) => a.displayName.localeCompare(b.displayName)).map(bookmark => ({ label: bookmark.displayName }));
+                quickPick.items = bookmarks.slice()
+                    .sort((a, b) => a.displayName.localeCompare(b.displayName))
+                    .map(toItem);
             }
         });
         quickPick.onDidAccept(() => {
             const selectedBookmark = quickPick.selectedItems[0];
             if (selectedBookmark) {
-                const selectedBookmarkId = bookmarks.find(bookmark => bookmark.displayName === selectedBookmark.label).id;
-                vscode.commands.executeCommand('workbench.extensions.search', `${selectedBookmarkId}`);
+                logInfo(`Opening local details from search: ${selectedBookmark.bookmarkId}`);
+                detailsProvider.show(selectedBookmark.bookmarkId);
             }
             quickPick.hide();
         });
