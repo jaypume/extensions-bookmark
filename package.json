@@ -3,7 +3,7 @@
   "displayName": "Extensions Bookmark",
   "description": "Bookmark Visual Studio Code extensions for later use.",
   "icon": "media/extension-bookmarker-logo.png",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "publisher": "pujie",
   "repository": {
     "type": "git",
