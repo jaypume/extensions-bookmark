@@ -3,9 +3,17 @@ Changelog
 
 All notable changes to Extensions Bookmark will be documented in this file.
 
-CURRENT VERSION - 1.1.0
+CURRENT VERSION - 1.2.0
 -----------------------
 ### CHANGES
+
+- **Detect installed-but-unbookmarked extensions.** On refresh and activation, locally installed extensions that are not in any bookmark are now surfaced in the Diff bucket (grouped by status), under the Default category (grouped by category), and in the flat view. They are marked with a 🆕 emoji and stay visible regardless of the active filter.
+- Click a 🆕 item (or right-click → "Add to Bookmarks") to bookmark it. Prefers Marketplace metadata for downloads/rating; falls back to local package data so private or unpublished extensions still bookmark correctly.
+- Fixed status and details for newly bookmarked installed extensions (now correctly shown as wanted & installed, ✅).
+- "Open in Marketplace" now works on unbookmarked items.
+
+1.1.0
+-----------------------
 - Renamed to **Extensions Bookmark** (`pujie.extensions-bookmark`); forked from `osxzxso/extension-bookmarker`.
 - Storage moved out of `settings.json` into a standalone JSON file under the extension's `globalStorage` directory (`User/globalStorage/pujie.extensions-bookmark/data.json`); legacy `settings.json` data is migrated automatically on first run.
 

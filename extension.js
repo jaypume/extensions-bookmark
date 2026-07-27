@@ -34,6 +34,49 @@ function computeInstalledSet() {
     return new Set(vscode.extensions.all.map(e => e.id.toLowerCase()));
 }
 
+// Extensions installed locally but absent from the bookmarks list.
+// Returned as pseudo-bookmarks so they render through the same tree pipeline.
+// In-memory cache (rebuilt each refresh) lets the details view look them up.
+const extraBookmarksCache = new Map(); // lowercased id -> bookmark
+
+function computeExtraBookmarks(installedSet) {
+    const bookmarks = store.get('bookmarks', []);
+    const known = new Set(bookmarks.map(b => String(b.id).toLowerCase()));
+    const result = [];
+    for (const ext of vscode.extensions.all) {
+        const id = String(ext.id);
+        const lower = id.toLowerCase();
+        // Skip editor built-ins shipped under the vscode.* namespace.
+        if (lower.startsWith('vscode.')) continue;
+        if (known.has(lower)) continue;
+        if (!installedSet.has(lower)) continue;
+        const displayName = (ext.packageJSON && ext.packageJSON.displayName) || id;
+        result.push({
+            id, displayName,
+            category: 'Default',
+            extra: true,
+            dateAdded: ''
+        });
+    }
+    extraBookmarksCache.clear();
+    for (const bm of result) extraBookmarksCache.set(bm.id.toLowerCase(), bm);
+    return result;
+}
+
+function decorateExtra(bookmark) {
+    return { bookmark, want: undefined, actual: true, status: 'extra-installed', extra: true };
+}
+
+// Case-insensitive bookmark lookup used by the details view. Falls back to the
+// in-memory extra (unbookmarked) cache so details can render those too.
+function lookupBookmark(bookmarkId) {
+    if (!bookmarkId) return undefined;
+    const lower = String(bookmarkId).toLowerCase();
+    const bookmark = store.get('bookmarks', []).find(b => String(b.id).toLowerCase() === lower);
+    if (bookmark) return bookmark;
+    return extraBookmarksCache.get(lower);
+}
+
 // Determine the 4-state status of a bookmark vs. actual install state.
 // wantedInstall is optional (defaults to true for backward compat).
 function decorateBookmark(bookmark, installedSet) {
@@ -54,7 +97,9 @@ const STATUS_VISUALS = {
     'ok-installed':    { codicon: 'check',       color: 'testing.iconPassed',    desc: '✅' },
     'want-install':    { codicon: 'arrow-down',  color: 'editorInfo.foreground', desc: '⚠️' },
     'want-uninstall':  { codicon: 'x',           color: 'editorError.foreground', desc: '🗑️' },
-    'ok-uninstalled':  { codicon: 'check',       color: 'testing.iconPassed',    desc: '' }
+    'ok-uninstalled':  { codicon: 'check',       color: 'testing.iconPassed',    desc: '' },
+    // Installed locally but not in any bookmark — surfaced in the Diff bucket.
+    'extra-installed': { codicon: 'add',         color: 'editorWarning.foreground', desc: '🆕' }
 };
 
 function sortBookmarks(list, sortingOption) {
@@ -83,12 +128,21 @@ function wasAddedWithin(bookmark, hours) {
     return Number.isFinite(addedAt) && age >= 0 && age <= hours * 60 * 60 * 1000;
 }
 
+function isDiffStatus(d) {
+    return d.status === 'want-install'
+        || d.status === 'want-uninstall'
+        || d.status === 'extra-installed';
+}
+
 function passesFilter(d, statusFilter, recentHours) {
+    // Extra (installed-but-unbookmarked) items are always visible regardless
+    // of the active filter, so they always surface in the Diff bucket.
+    if (d.extra) return true;
     switch (statusFilter) {
         case 'recent':     return wasAddedWithin(d.bookmark, recentHours);
         case 'installed':  return d.actual;
         case 'not-wanted': return d.want === false;
-        case 'diff':       return d.status === 'want-install' || d.status === 'want-uninstall';
+        case 'diff':       return isDiffStatus(d);
         case 'all':
         default:           return true;
     }
@@ -165,6 +219,39 @@ async function fetchMarketplaceBookmark(extensionId, category) {
     };
 }
 
+// Build a bookmark from a locally-installed extension without hitting the
+// Marketplace. Used for "installed but not bookmarked" items so private or
+// unpublished extensions can still be bookmarked. Falls back gracefully —
+// only id/displayName/category are required; the rest default to 'N/A'.
+function buildBookmarkFromLocal(extensionId, category) {
+    const ext = vscode.extensions.all.find(e => e.id.toLowerCase() === String(extensionId).toLowerCase());
+    const pkg = (ext && ext.packageJSON) || {};
+    const id = ext ? ext.id : extensionId;
+    const dateAdded = new Date().toLocaleString('en-US', {
+        year: 'numeric', month: 'numeric', day: 'numeric',
+        hour: 'numeric', minute: 'numeric'
+    });
+    const lastUpdated = pkg.lastUpdated
+        ? new Date(pkg.lastUpdated).toLocaleString('en-US', {
+            year: 'numeric', month: 'numeric', day: 'numeric',
+            hour: 'numeric', minute: 'numeric'
+        })
+        : 'N/A';
+    return {
+        id,
+        displayName: pkg.displayName || id,
+        icon: pkg.icon
+            ? vscode.Uri.joinPath(ext.extensionUri, pkg.icon).toString()
+            : 'https://raw.githubusercontent.com/jaypume/extensions-bookmark/main/media/default-bookmark-icon.png',
+        category,
+        dateAdded,
+        downloadCount: 'N/A',
+        rating: 'N/A',
+        lastUpdate: lastUpdated,
+        wantedInstall: true
+    };
+}
+
 function toBookmarkTreeItem(d) {
     const bookmark = d.bookmark;
     const treeItem = new vscode.TreeItem(bookmark.displayName);
@@ -180,12 +267,21 @@ function toBookmarkTreeItem(d) {
     }
     treeItem.tooltip = details;
     treeItem.description = STATUS_VISUALS[d.status].desc;
-    treeItem.command = {
-        command: 'extensions-bookmark.showDetails',
-        arguments: [bookmark.id],
-        title: 'Show Details'
-    };
-    treeItem.contextValue = 'bookmarkedExtension';
+    if (d.extra) {
+        // Clicking an installed-but-unbookmarked item offers to bookmark it.
+        treeItem.command = {
+            command: 'extensions-bookmark.addExtraToBookmarks',
+            arguments: [bookmark.id],
+            title: 'Add to Bookmarks'
+        };
+    } else {
+        treeItem.command = {
+            command: 'extensions-bookmark.showDetails',
+            arguments: [bookmark.id],
+            title: 'Show Details'
+        };
+    }
+    treeItem.contextValue = d.extra ? 'extraExtension' : 'bookmarkedExtension';
     // Prefer the bookmark's marketplace icon; otherwise use a colored status icon.
     if (bookmark.icon) {
         treeItem.iconPath = vscode.Uri.parse(bookmark.icon);
@@ -236,7 +332,11 @@ class BookmarkDataProvider {
     getBookmarkItem(bookmark, installedSet = computeInstalledSet(), scope = 'category') {
         const bookmarkId = String(bookmark.id).toLowerCase();
         const key = `${scope}:${bookmarkId}`;
-        const next = toBookmarkTreeItem(decorateBookmark(bookmark, installedSet));
+        // Extra (unbookmarked) items come pre-decorated; don't re-derive their status.
+        const decorated = bookmark.extra
+            ? decorateExtra(bookmark)
+            : decorateBookmark(bookmark, installedSet);
+        const next = toBookmarkTreeItem(decorated);
         next.id = `bookmark:${key}`;
         const treeItem = this.bookmarkItems.get(key);
         if (treeItem) {
@@ -257,6 +357,10 @@ class BookmarkDataProvider {
         const recentHours = getRecentHours();
         const visible = (d) => passesFilter(d, this.statusFilter, recentHours);
 
+        // Installed-but-not-bookmarked extensions, surfaced as pseudo-bookmarks.
+        const extraBookmarks = computeExtraBookmarks(installedSet);
+        const decorateExtraAll = () => extraBookmarks.map(decorateExtra);
+
         if (element) {
             let inGroup;
             let itemScope;
@@ -269,15 +373,23 @@ class BookmarkDataProvider {
                         if (!visible(d)) return false;
                         if (element.statusKey === '__wanted__')    return d.want === true;
                         if (element.statusKey === '__notwanted__') return d.want === false;
-                        return d.status === 'want-install' || d.status === 'want-uninstall';
+                        return isDiffStatus(d);
                     });
+                // Extra (installed, not bookmarked) items belong to the Diff bucket.
+                if (element.statusKey === '__diff__') {
+                    inGroup = inGroup.concat(decorateExtraAll().filter(visible));
+                }
             } else {
                 itemScope = `category:${element.label}`;
-                // Grouped by category.
+                // Grouped by category. Extra items have no category, so they
+                // land under 'Default'.
                 inGroup = bookmarks
                     .filter(bm => bm.category === element.label)
                     .map(decorate)
                     .filter(visible);
+                if (element.label === 'Default') {
+                    inGroup = inGroup.concat(decorateExtraAll().filter(visible));
+                }
             }
             // Sort by status priority (wanted&installed → diff → unwanted),
             // then by the user's chosen sorting option within each tier.
@@ -285,6 +397,7 @@ class BookmarkDataProvider {
                 if (d.status === 'ok-installed')   return 0; // wanted & installed
                 if (d.status === 'want-install')   return 1; // diff: to install
                 if (d.status === 'want-uninstall') return 1; // diff: to remove
+                if (d.status === 'extra-installed') return 1; // diff: not bookmarked
                 return 2;                                    // unwanted (ok-uninstalled)
             };
             const tierKey = (d) => statusRank(d);
@@ -307,7 +420,7 @@ class BookmarkDataProvider {
 
         // Root level.
         if (this.viewMode === 'flat') {
-            const flat = bookmarks.map(decorate).filter(visible);
+            const flat = bookmarks.map(decorate).concat(decorateExtraAll()).filter(visible);
             return sortBookmarks(flat.map(d => d.bookmark), 'A-Z')
                 .map(bm => this.getBookmarkItem(bm, installedSet, 'flat'));
         }
@@ -315,7 +428,8 @@ class BookmarkDataProvider {
         if (this.viewMode === 'by-status') {
             // Three fixed buckets, always shown (even if empty).
             // Wanted = expected to install; Not Wanted = expected to uninstall;
-            // Diff = expectation != actual (subset shown in both above).
+            // Diff = expectation != actual, plus extra installed-but-unbookmarked.
+            const all = bookmarks.map(decorate).concat(decorateExtraAll());
             const buckets = [
                 { label: 'Wanted',     key: '__wanted__' },
                 { label: 'Not Wanted', key: '__notwanted__' },
@@ -325,9 +439,9 @@ class BookmarkDataProvider {
                 const inBucket = (d) => {
                     if (b.key === '__wanted__')    return d.want === true;
                     if (b.key === '__notwanted__') return d.want === false;
-                    return d.status === 'want-install' || d.status === 'want-uninstall';
+                    return isDiffStatus(d);
                 };
-                const count = bookmarks.map(decorate).filter(d => visible(d) && inBucket(d)).length;
+                const count = all.filter(d => visible(d) && inBucket(d)).length;
                 const treeItem = new vscode.TreeItem(`${b.label} (${count})`, vscode.TreeItemCollapsibleState.Collapsed);
                 treeItem.contextValue = 'statusGroup';
                 treeItem.statusKey = b.key;
@@ -336,7 +450,10 @@ class BookmarkDataProvider {
         }
 
         // by-category root: category list, 'Default' pinned first.
-        const sortedCategories = categories.sort((a, b) => {
+        // Ensure 'Default' exists so extra (unbookmarked) items always render.
+        const catSet = categories.slice();
+        if (!catSet.includes('Default')) catSet.push('Default');
+        const sortedCategories = catSet.sort((a, b) => {
             if (a === 'Default') return -1;
             if (b === 'Default') return 1;
             return a.localeCompare(b);
@@ -362,7 +479,7 @@ class DetailsViewProvider {
             codiconTtf: nk(['node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf'])
         };
         view.webview.options = { enableScripts: true };
-        const bookmark = store.get('bookmarks', []).find(b => b.id === this.bookmarkId);
+        const bookmark = lookupBookmark(this.bookmarkId);
         view.webview.html = bookmark ? this._renderCard(bookmark) : this._renderEmpty();
         view.webview.onDidReceiveMessage(async (msg) => {
             if (msg && msg.type === 'saveNote' && this.bookmarkId) {
@@ -382,8 +499,7 @@ class DetailsViewProvider {
     show(bookmarkId) {
         this.bookmarkId = bookmarkId;
         if (this.view) {
-            const bookmarks = store.get('bookmarks', []);
-            const bookmark = bookmarks.find(b => b.id === bookmarkId);
+            const bookmark = lookupBookmark(bookmarkId);
             if (bookmark) this.view.webview.html = this._renderCard(bookmark);
             this.view.show?.(true);
         }
@@ -828,6 +944,49 @@ function activate(context) {
         }
     }));
 
+    // Bookmark an installed extension surfaced via the Diff bucket (🆕).
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.addExtraToBookmarks', async (itemOrId) => {
+        // Context-menu invocations pass the TreeItem; click invocations pass
+        // the id string directly. Normalize to the extension id.
+        const extensionId = typeof itemOrId === 'string'
+            ? itemOrId
+            : itemOrId?.command?.arguments?.[0] || itemOrId?.bookmarkId;
+        if (!extensionId) return;
+        const categories = store.get('categories', []);
+        const bookmarks = store.get('bookmarks', []);
+        if (bookmarks.some(bookmark => String(bookmark.id).toLowerCase() === extensionId.toLowerCase())) {
+            vscode.window.showInformationMessage(`Bookmark ${extensionId} already exists.`);
+            return;
+        }
+        const sortedCategories = categories.slice().sort((a, b) => {
+            if (a === 'Default') return -1;
+            if (b === 'Default') return 1;
+            return a.localeCompare(b);
+        });
+        const selectedCategory = await vscode.window.showQuickPick(sortedCategories, {
+            placeHolder: `Select a category for ${extensionId}`
+        });
+        if (!selectedCategory) return;
+        try {
+            // Prefer Marketplace data (downloads/rating); fall back to local
+            // metadata so private/unpublished extensions still bookmark.
+            let bookmark = null;
+            try {
+                bookmark = await fetchMarketplaceBookmark(extensionId, selectedCategory);
+            } catch (marketError) {
+                logError(`Marketplace lookup failed for ${extensionId}, using local data`, marketError);
+            }
+            if (!bookmark) bookmark = buildBookmarkFromLocal(extensionId, selectedCategory);
+            bookmarks.push(bookmark);
+            await store.update('bookmarks', bookmarks, vscode.ConfigurationTarget.Global);
+            bookmarkDataProvider.refresh();
+            vscode.window.showInformationMessage(`Extension ${extensionId} has been bookmarked.`);
+        } catch (error) {
+            logError(`Failed to add bookmark ${extensionId}`, error);
+            vscode.window.showErrorMessage(`Failed to add bookmark for ${extensionId}: ${error?.message || error}`);
+        }
+    }));
+
     context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.addFromList', async () => {
         const clipboard = await vscode.env.clipboard.readText();
         const clipboardItems = parseExtensionIds(clipboard);
@@ -947,8 +1106,9 @@ function activate(context) {
     }));
 
     // Command to open a bookmarked extension in the Extensions view
-    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.openExtension', (extensionId) => {
-        vscode.commands.executeCommand('extension.open', extensionId);
+    context.subscriptions.push(vscode.commands.registerCommand('extensions-bookmark.openExtension', (itemOrId) => {
+        const extensionId = typeof itemOrId === 'string' ? itemOrId : itemOrId?.bookmarkId;
+        if (extensionId) vscode.commands.executeCommand('extension.open', extensionId);
     }));
 
     // Show the details card for a bookmark (single click + viewDetails).

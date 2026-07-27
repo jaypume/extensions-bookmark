@@ -3,7 +3,7 @@
   "displayName": "Extensions Bookmark",
   "description": "Bookmark Visual Studio Code extensions for later use.",
   "icon": "media/extension-bookmarker-logo.png",
-  "version": "1.1.6",
+  "version": "1.2.0",
   "publisher": "pujie",
   "repository": {
     "type": "git",
@@ -18,6 +18,7 @@
   "activationEvents": [
     "onCommand:extensions-bookmark.add",
     "onCommand:extensions-bookmark.addBookmark",
+    "onCommand:extensions-bookmark.addExtraToBookmarks",
     "onCommand:extensions-bookmark.addFromList",
     "onCommand:extensions-bookmark.viewBookmarks",
     "onCommand:extensions-bookmark.removeBookmark",
@@ -81,6 +82,10 @@
       {
         "command": "extensions-bookmark.addBookmark",
         "title": "Add Bookmark"
+      },
+      {
+        "command": "extensions-bookmark.addExtraToBookmarks",
+        "title": "Add to Bookmarks"
       },
       {
         "command": "extensions-bookmark.addFromList",
@@ -346,6 +351,16 @@
           "command": "extensions-bookmark.syncExtension",
           "group": "0_extension_bookmarker",
           "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
+        },
+        {
+          "command": "extensions-bookmark.addExtraToBookmarks",
+          "group": "0_extension_bookmarker",
+          "when": "view == extensionsBookmarkView && viewItem == extraExtension"
+        },
+        {
+          "command": "extensions-bookmark.openExtension",
+          "group": "0_extension_bookmarker",
+          "when": "view == extensionsBookmarkView && viewItem == extraExtension"
         }
       ]
     }
