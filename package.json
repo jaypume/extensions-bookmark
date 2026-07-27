@@ -3,7 +3,7 @@
   "displayName": "Extensions Bookmark",
   "description": "Bookmark Visual Studio Code extensions for later use.",
   "icon": "media/extension-bookmarker-logo.png",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "publisher": "pujie",
   "repository": {
     "type": "git",
@@ -16,7 +16,6 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:extensions-bookmark.add",
     "onCommand:extensions-bookmark.addBookmark",
     "onCommand:extensions-bookmark.addExtraToBookmarks",
     "onCommand:extensions-bookmark.addFromList",
@@ -27,22 +26,18 @@
     "onCommand:extensions-bookmark.removeCategory",
     "onCommand:extensions-bookmark.moveBookmark",
     "onCommand:extensions-bookmark.searchBookmarks",
-    "onCommand:extensions-bookmark.refresh",
-    "onCommand:extensions-bookmark.switchToByStatus",
-    "onCommand:extensions-bookmark.switchToFlat",
-    "onCommand:extensions-bookmark.switchToByCategory",
-    "onCommand:extensions-bookmark.filterStatus",
+    "onCommand:extensions-bookmark.filterAll",
+    "onCommand:extensions-bookmark.filterInstalled",
+    "onCommand:extensions-bookmark.filterUninstalled",
+    "onCommand:extensions-bookmark.filterWanted",
+    "onCommand:extensions-bookmark.filterUnwanted",
+    "onCommand:extensions-bookmark.filterAdded1d",
+    "onCommand:extensions-bookmark.filterAdded1w",
+    "onCommand:extensions-bookmark.filterAdded1m",
     "onCommand:extensions-bookmark.syncToData",
     "onCommand:extensions-bookmark.syncFromData",
     "onCommand:extensions-bookmark.toggleWanted",
     "onCommand:extensions-bookmark.syncExtension",
-    "onCommand:extensions-bookmark.addTagToList",
-    "onCommand:extensions-bookmark.renameTagInList",
-    "onCommand:extensions-bookmark.removeTagFromList",
-    "onCommand:extensions-bookmark.addTagToBookmark",
-    "onCommand:extensions-bookmark.removeTagFromBookmark",
-    "onCommand:extensions-bookmark.filterByTag",
-    "onCommand:extensions-bookmark.sortBookmarks",
     "onCommand:extensions-bookmark.addNote",
     "onCommand:extensions-bookmark.editNote",
     "onCommand:extensions-bookmark.removeNote",
@@ -51,8 +46,31 @@
     "onCommand:extensions-bookmark.importData",
     "onCommand:extensions-bookmark.exportData",
     "onCommand:extensions-bookmark.removeAllData",
+    "onCommand:extensions-bookmark.expandTree",
+    "onCommand:extensions-bookmark.collapseTree",
+    "onCommand:extensions-bookmark.groupByCategory",
+    "onCommand:extensions-bookmark.groupByWanted",
+    "onCommand:extensions-bookmark.groupByInstalled",
+    "onCommand:extensions-bookmark.groupByAge",
+    "onCommand:extensions-bookmark.groupByFlat",
     "onView:extensionsBookmarkView",
-    "onView:extensionsBookmarkDetails"
+    "onView:extensionsBookmarkDetails",
+    "onCommand:extensions-bookmark.sortAZ",
+    "onCommand:extensions-bookmark.sortAZCurrent",
+    "onCommand:extensions-bookmark.sortZA",
+    "onCommand:extensions-bookmark.sortZACurrent",
+    "onCommand:extensions-bookmark.sortNewOld",
+    "onCommand:extensions-bookmark.sortNewOldCurrent",
+    "onCommand:extensions-bookmark.sortOldNew",
+    "onCommand:extensions-bookmark.sortOldNewCurrent",
+    "onCommand:extensions-bookmark.sortWanted",
+    "onCommand:extensions-bookmark.sortWantedCurrent",
+    "onCommand:extensions-bookmark.sortUnwanted",
+    "onCommand:extensions-bookmark.sortUnwantedCurrent",
+    "onCommand:extensions-bookmark.sortInstalled",
+    "onCommand:extensions-bookmark.sortInstalledCurrent",
+    "onCommand:extensions-bookmark.sortMissing",
+    "onCommand:extensions-bookmark.sortMissingCurrent"
   ],
   "main": "./extension",
   "contributes": {
@@ -73,15 +91,32 @@
         },
         {
           "id": "extensionsBookmarkDetails",
-          "name": "Details",
-          "type": "webview"
+          "name": "Details"
         }
       ]
     },
+    "submenus": [
+      {
+        "id": "extensions-bookmark.groupBy",
+        "label": "Group By",
+        "icon": "$(group-by-ref-type)"
+      },
+      {
+        "id": "extensions-bookmark.filterBy",
+        "label": "Filter",
+        "icon": "$(filter)"
+      },
+      {
+        "id": "extensions-bookmark.sortBy",
+        "label": "Sort By",
+        "icon": "$(sort-precedence)"
+      }
+    ],
     "commands": [
       {
         "command": "extensions-bookmark.addBookmark",
-        "title": "Add Bookmark"
+        "title": "Add Bookmark",
+        "icon": "$(add)"
       },
       {
         "command": "extensions-bookmark.addExtraToBookmarks",
@@ -116,32 +151,68 @@
         "title": "Move Bookmark"
       },
       {
-        "command": "extensions-bookmark.addTagToList",
-        "title": "Add Tag to List"
+        "command": "extensions-bookmark.sortAZ",
+        "title": "Name A → Z"
       },
       {
-        "command": "extensions-bookmark.renameTagInList",
-        "title": "Rename Tag in List"
+        "command": "extensions-bookmark.sortAZCurrent",
+        "title": "✓ Name A → Z"
       },
       {
-        "command": "extensions-bookmark.removeTagFromList",
-        "title": "Remove Tag from List"
+        "command": "extensions-bookmark.sortZA",
+        "title": "Name Z → A"
       },
       {
-        "command": "extensions-bookmark.addTagToBookmark",
-        "title": "Add Tag to Bookmark"
+        "command": "extensions-bookmark.sortZACurrent",
+        "title": "✓ Name Z → A"
       },
       {
-        "command": "extensions-bookmark.removeTagFromBookmark",
-        "title": "Remove Tag from Bookmark"
+        "command": "extensions-bookmark.sortNewOld",
+        "title": "Added New → Old"
       },
       {
-        "command": "extensions-bookmark.filterByTag",
-        "title": "Filter Bookmarks by Tag"
+        "command": "extensions-bookmark.sortNewOldCurrent",
+        "title": "✓ Added New → Old"
       },
       {
-        "command": "extensions-bookmark.sortBookmarks",
-        "title": "Sort Bookmarks"
+        "command": "extensions-bookmark.sortOldNew",
+        "title": "Added Old → New"
+      },
+      {
+        "command": "extensions-bookmark.sortOldNewCurrent",
+        "title": "✓ Added Old → New"
+      },
+      {
+        "command": "extensions-bookmark.sortWanted",
+        "title": "Wanted First"
+      },
+      {
+        "command": "extensions-bookmark.sortWantedCurrent",
+        "title": "✓ Wanted First"
+      },
+      {
+        "command": "extensions-bookmark.sortUnwanted",
+        "title": "Not Wanted First"
+      },
+      {
+        "command": "extensions-bookmark.sortUnwantedCurrent",
+        "title": "✓ Not Wanted First"
+      },
+      {
+        "command": "extensions-bookmark.sortInstalled",
+        "title": "Installed First"
+      },
+      {
+        "command": "extensions-bookmark.sortInstalledCurrent",
+        "title": "✓ Installed First"
+      },
+      {
+        "command": "extensions-bookmark.sortMissing",
+        "title": "Missing First"
+      },
+      {
+        "command": "extensions-bookmark.sortMissingCurrent",
+        "title": "✓ Missing First"
       },
       {
         "command": "extensions-bookmark.addNote",
@@ -180,14 +251,6 @@
         "title": "Remove All Data"
       },
       {
-        "command": "extensions-bookmark.add",
-        "title": "Add",
-        "icon": {
-          "light": "media/light/actions-icon.png",
-          "dark": "media/dark/actions-icon.png"
-        }
-      },
-      {
         "command": "extensions-bookmark.searchBookmarks",
         "title": "Search",
         "icon": {
@@ -196,29 +259,68 @@
         }
       },
       {
-        "command": "extensions-bookmark.refresh",
-        "title": "Refresh",
-        "icon": "$(refresh)"
+        "command": "extensions-bookmark.filterAll",
+        "title": "All"
       },
       {
-        "command": "extensions-bookmark.switchToByStatus",
-        "title": "Group by Status",
-        "icon": "$(folder)"
+        "command": "extensions-bookmark.filterAllCurrent",
+        "title": "✓ All"
       },
       {
-        "command": "extensions-bookmark.switchToFlat",
-        "title": "Flat View",
-        "icon": "$(list-flat)"
+        "command": "extensions-bookmark.filterInstalled",
+        "title": "Installed"
       },
       {
-        "command": "extensions-bookmark.switchToByCategory",
-        "title": "Group by Category",
-        "icon": "$(list-tree)"
+        "command": "extensions-bookmark.filterInstalledCurrent",
+        "title": "✓ Installed"
       },
       {
-        "command": "extensions-bookmark.filterStatus",
-        "title": "Filter Bookmarks",
-        "icon": "$(filter)"
+        "command": "extensions-bookmark.filterUninstalled",
+        "title": "Not Installed"
+      },
+      {
+        "command": "extensions-bookmark.filterUninstalledCurrent",
+        "title": "✓ Not Installed"
+      },
+      {
+        "command": "extensions-bookmark.filterWanted",
+        "title": "Wanted"
+      },
+      {
+        "command": "extensions-bookmark.filterWantedCurrent",
+        "title": "✓ Wanted"
+      },
+      {
+        "command": "extensions-bookmark.filterUnwanted",
+        "title": "Not Wanted"
+      },
+      {
+        "command": "extensions-bookmark.filterUnwantedCurrent",
+        "title": "✓ Not Wanted"
+      },
+      {
+        "command": "extensions-bookmark.filterAdded1d",
+        "title": "Added in 1 day"
+      },
+      {
+        "command": "extensions-bookmark.filterAdded1dCurrent",
+        "title": "✓ Added in 1 day"
+      },
+      {
+        "command": "extensions-bookmark.filterAdded1w",
+        "title": "Added in 1 week"
+      },
+      {
+        "command": "extensions-bookmark.filterAdded1wCurrent",
+        "title": "✓ Added in 1 week"
+      },
+      {
+        "command": "extensions-bookmark.filterAdded1m",
+        "title": "Added in 1 month"
+      },
+      {
+        "command": "extensions-bookmark.filterAdded1mCurrent",
+        "title": "✓ Added in 1 month"
       },
       {
         "command": "extensions-bookmark.syncToData",
@@ -235,6 +337,99 @@
       {
         "command": "extensions-bookmark.syncExtension",
         "title": "Sync (Install or Uninstall)"
+      },
+      {
+        "command": "extensions-bookmark.installSelected",
+        "title": "Install",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "extensions-bookmark.uninstallSelected",
+        "title": "Uninstall",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "extensions-bookmark.inlineWanted",
+        "title": "Wanted — Toggle to Not Wanted",
+        "icon": "media/inline-wanted.svg"
+      },
+      {
+        "command": "extensions-bookmark.inlineUnwanted",
+        "title": "Not Wanted — Toggle to Wanted",
+        "icon": "media/inline-unwanted.svg"
+      },
+      {
+        "command": "extensions-bookmark.inlineInstalled",
+        "title": "Installed — Uninstall",
+        "icon": "media/inline-installed.svg"
+      },
+      {
+        "command": "extensions-bookmark.inlineMissing",
+        "title": "Not Installed — Install",
+        "icon": "media/inline-missing.svg"
+      },
+      {
+        "command": "extensions-bookmark.copyDetailValue",
+        "title": "Copy Value"
+      },
+      {
+        "command": "extensions-bookmark.editNoteFromDetails",
+        "title": "Edit Note"
+      },
+      {
+        "command": "extensions-bookmark.expandTree",
+        "title": "Expand All",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "extensions-bookmark.collapseTree",
+        "title": "Collapse All",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "extensions-bookmark.groupByCategory",
+        "title": "Category",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "extensions-bookmark.groupByCategoryCurrent",
+        "title": "✓ Category"
+      },
+      {
+        "command": "extensions-bookmark.groupByWanted",
+        "title": "Wanted",
+        "icon": "$(star-full)"
+      },
+      {
+        "command": "extensions-bookmark.groupByWantedCurrent",
+        "title": "✓ Wanted"
+      },
+      {
+        "command": "extensions-bookmark.groupByInstalled",
+        "title": "Installed",
+        "icon": "$(pass-filled)"
+      },
+      {
+        "command": "extensions-bookmark.groupByInstalledCurrent",
+        "title": "✓ Installed"
+      },
+      {
+        "command": "extensions-bookmark.groupByAge",
+        "title": "Time Added",
+        "icon": "$(history)"
+      },
+      {
+        "command": "extensions-bookmark.groupByAgeCurrent",
+        "title": "✓ Time Added"
+      },
+      {
+        "command": "extensions-bookmark.groupByFlat",
+        "title": "Flat",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "extensions-bookmark.groupByFlatCurrent",
+        "title": "✓ Flat"
       }
     ],
     "configuration": {
@@ -249,118 +444,550 @@
       }
     },
     "menus": {
+      "commandPalette": [
+        {
+          "command": "extensions-bookmark.copyDetailValue",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.editNoteFromDetails",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.expandTree",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.collapseTree",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.groupByCategory",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.groupByCategoryCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.groupByWanted",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.groupByWantedCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.groupByInstalled",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.groupByInstalledCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.groupByAge",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.groupByAgeCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.groupByFlat",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.groupByFlatCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.showDetails",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.inlineWanted",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.inlineUnwanted",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.inlineInstalled",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.inlineMissing",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterAll",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterAllCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterInstalled",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterInstalledCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterUninstalled",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterUninstalledCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterWanted",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterWantedCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterUnwanted",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterUnwantedCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterAdded1d",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterAdded1dCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterAdded1w",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterAdded1wCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterAdded1m",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterAdded1mCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortAZ",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortAZCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortZA",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortZACurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortNewOld",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortNewOldCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortOldNew",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortOldNewCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortWanted",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortWantedCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortUnwanted",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortUnwantedCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortInstalled",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortInstalledCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortMissing",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.sortMissingCurrent",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
-          "command": "extensions-bookmark.add",
-          "group": "navigation",
+          "command": "extensions-bookmark.addBookmark",
+          "group": "navigation@1",
           "when": "view == extensionsBookmarkView"
         },
         {
           "command": "extensions-bookmark.searchBookmarks",
-          "group": "navigation",
+          "group": "navigation@2",
           "when": "view == extensionsBookmarkView"
         },
         {
-          "command": "extensions-bookmark.refresh",
-          "group": "navigation",
+          "submenu": "extensions-bookmark.groupBy",
+          "group": "navigation@3",
           "when": "view == extensionsBookmarkView"
         },
         {
-          "command": "extensions-bookmark.switchToByStatus",
-          "group": "navigation",
-          "when": "view == extensionsBookmarkView && extensions-bookmark.viewMode == 'by-category'"
-        },
-        {
-          "command": "extensions-bookmark.switchToFlat",
-          "group": "navigation",
-          "when": "view == extensionsBookmarkView && extensions-bookmark.viewMode == 'by-status'"
-        },
-        {
-          "command": "extensions-bookmark.switchToByCategory",
-          "group": "navigation",
-          "when": "view == extensionsBookmarkView && extensions-bookmark.viewMode == 'flat'"
-        },
-        {
-          "command": "extensions-bookmark.filterStatus",
-          "group": "navigation",
+          "submenu": "extensions-bookmark.filterBy",
+          "group": "navigation@4",
           "when": "view == extensionsBookmarkView"
+        },
+        {
+          "submenu": "extensions-bookmark.sortBy",
+          "group": "navigation@5",
+          "when": "view == extensionsBookmarkView"
+        },
+        {
+          "command": "extensions-bookmark.collapseTree",
+          "group": "navigation@6",
+          "when": "view == extensionsBookmarkView && extensions-bookmark.treeExpanded"
+        },
+        {
+          "command": "extensions-bookmark.expandTree",
+          "group": "navigation@6",
+          "when": "view == extensionsBookmarkView && !extensions-bookmark.treeExpanded"
+        },
+        {
+          "command": "extensions-bookmark.addFromList",
+          "group": "9_more@1",
+          "when": "view == extensionsBookmarkView"
+        },
+        {
+          "command": "extensions-bookmark.addCategory",
+          "group": "9_more@2",
+          "when": "view == extensionsBookmarkView"
+        },
+        {
+          "command": "extensions-bookmark.syncToData",
+          "group": "9_more@3",
+          "when": "view == extensionsBookmarkView"
+        },
+        {
+          "command": "extensions-bookmark.syncFromData",
+          "group": "9_more@5",
+          "when": "view == extensionsBookmarkView"
+        },
+        {
+          "command": "extensions-bookmark.importData",
+          "group": "9_more@6",
+          "when": "view == extensionsBookmarkView"
+        },
+        {
+          "command": "extensions-bookmark.exportData",
+          "group": "9_more@7",
+          "when": "view == extensionsBookmarkView"
+        }
+      ],
+      "extensions-bookmark.groupBy": [
+        {
+          "command": "extensions-bookmark.groupByCategory",
+          "when": "extensions-bookmark.groupBy != 'category'",
+          "group": "1_group@1"
+        },
+        {
+          "command": "extensions-bookmark.groupByCategoryCurrent",
+          "when": "extensions-bookmark.groupBy == 'category'",
+          "group": "1_group@1"
+        },
+        {
+          "command": "extensions-bookmark.groupByWanted",
+          "when": "extensions-bookmark.groupBy != 'wanted'",
+          "group": "1_group@2"
+        },
+        {
+          "command": "extensions-bookmark.groupByWantedCurrent",
+          "when": "extensions-bookmark.groupBy == 'wanted'",
+          "group": "1_group@2"
+        },
+        {
+          "command": "extensions-bookmark.groupByInstalled",
+          "when": "extensions-bookmark.groupBy != 'installed'",
+          "group": "1_group@3"
+        },
+        {
+          "command": "extensions-bookmark.groupByInstalledCurrent",
+          "when": "extensions-bookmark.groupBy == 'installed'",
+          "group": "1_group@3"
+        },
+        {
+          "command": "extensions-bookmark.groupByAge",
+          "when": "extensions-bookmark.groupBy != 'age'",
+          "group": "1_group@4"
+        },
+        {
+          "command": "extensions-bookmark.groupByAgeCurrent",
+          "when": "extensions-bookmark.groupBy == 'age'",
+          "group": "1_group@4"
+        },
+        {
+          "command": "extensions-bookmark.groupByFlat",
+          "when": "extensions-bookmark.groupBy != 'flat'",
+          "group": "1_group@5"
+        },
+        {
+          "command": "extensions-bookmark.groupByFlatCurrent",
+          "when": "extensions-bookmark.groupBy == 'flat'",
+          "group": "1_group@5"
+        }
+      ],
+      "extensions-bookmark.filterBy": [
+        {
+          "command": "extensions-bookmark.filterAll",
+          "when": "extensions-bookmark.filter != 'all'",
+          "group": "1_filter@1"
+        },
+        {
+          "command": "extensions-bookmark.filterAllCurrent",
+          "when": "extensions-bookmark.filter == 'all'",
+          "group": "1_filter@1"
+        },
+        {
+          "command": "extensions-bookmark.filterInstalled",
+          "when": "extensions-bookmark.filter != 'installed'",
+          "group": "1_filter@2"
+        },
+        {
+          "command": "extensions-bookmark.filterInstalledCurrent",
+          "when": "extensions-bookmark.filter == 'installed'",
+          "group": "1_filter@2"
+        },
+        {
+          "command": "extensions-bookmark.filterUninstalled",
+          "when": "extensions-bookmark.filter != 'uninstalled'",
+          "group": "1_filter@3"
+        },
+        {
+          "command": "extensions-bookmark.filterUninstalledCurrent",
+          "when": "extensions-bookmark.filter == 'uninstalled'",
+          "group": "1_filter@3"
+        },
+        {
+          "command": "extensions-bookmark.filterWanted",
+          "when": "extensions-bookmark.filter != 'wanted'",
+          "group": "1_filter@4"
+        },
+        {
+          "command": "extensions-bookmark.filterWantedCurrent",
+          "when": "extensions-bookmark.filter == 'wanted'",
+          "group": "1_filter@4"
+        },
+        {
+          "command": "extensions-bookmark.filterUnwanted",
+          "when": "extensions-bookmark.filter != 'unwanted'",
+          "group": "1_filter@5"
+        },
+        {
+          "command": "extensions-bookmark.filterUnwantedCurrent",
+          "when": "extensions-bookmark.filter == 'unwanted'",
+          "group": "1_filter@5"
+        },
+        {
+          "command": "extensions-bookmark.filterAdded1d",
+          "when": "extensions-bookmark.filter != 'added-1d'",
+          "group": "1_filter@6"
+        },
+        {
+          "command": "extensions-bookmark.filterAdded1dCurrent",
+          "when": "extensions-bookmark.filter == 'added-1d'",
+          "group": "1_filter@6"
+        },
+        {
+          "command": "extensions-bookmark.filterAdded1w",
+          "when": "extensions-bookmark.filter != 'added-1w'",
+          "group": "1_filter@7"
+        },
+        {
+          "command": "extensions-bookmark.filterAdded1wCurrent",
+          "when": "extensions-bookmark.filter == 'added-1w'",
+          "group": "1_filter@7"
+        },
+        {
+          "command": "extensions-bookmark.filterAdded1m",
+          "when": "extensions-bookmark.filter != 'added-1m'",
+          "group": "1_filter@8"
+        },
+        {
+          "command": "extensions-bookmark.filterAdded1mCurrent",
+          "when": "extensions-bookmark.filter == 'added-1m'",
+          "group": "1_filter@8"
+        }
+      ],
+      "extensions-bookmark.sortBy": [
+        {
+          "command": "extensions-bookmark.sortAZ",
+          "when": "extensions-bookmark.sort != 'A-Z'",
+          "group": "1_sort@1"
+        },
+        {
+          "command": "extensions-bookmark.sortAZCurrent",
+          "when": "extensions-bookmark.sort == 'A-Z'",
+          "group": "1_sort@1"
+        },
+        {
+          "command": "extensions-bookmark.sortZA",
+          "when": "extensions-bookmark.sort != 'Z-A'",
+          "group": "1_sort@2"
+        },
+        {
+          "command": "extensions-bookmark.sortZACurrent",
+          "when": "extensions-bookmark.sort == 'Z-A'",
+          "group": "1_sort@2"
+        },
+        {
+          "command": "extensions-bookmark.sortNewOld",
+          "when": "extensions-bookmark.sort != 'New-Old'",
+          "group": "1_sort@3"
+        },
+        {
+          "command": "extensions-bookmark.sortNewOldCurrent",
+          "when": "extensions-bookmark.sort == 'New-Old'",
+          "group": "1_sort@3"
+        },
+        {
+          "command": "extensions-bookmark.sortOldNew",
+          "when": "extensions-bookmark.sort != 'Old-New'",
+          "group": "1_sort@4"
+        },
+        {
+          "command": "extensions-bookmark.sortOldNewCurrent",
+          "when": "extensions-bookmark.sort == 'Old-New'",
+          "group": "1_sort@4"
+        },
+        {
+          "command": "extensions-bookmark.sortWanted",
+          "when": "extensions-bookmark.sort != 'Wanted'",
+          "group": "1_sort@5"
+        },
+        {
+          "command": "extensions-bookmark.sortWantedCurrent",
+          "when": "extensions-bookmark.sort == 'Wanted'",
+          "group": "1_sort@5"
+        },
+        {
+          "command": "extensions-bookmark.sortUnwanted",
+          "when": "extensions-bookmark.sort != 'Unwanted'",
+          "group": "1_sort@6"
+        },
+        {
+          "command": "extensions-bookmark.sortUnwantedCurrent",
+          "when": "extensions-bookmark.sort == 'Unwanted'",
+          "group": "1_sort@6"
+        },
+        {
+          "command": "extensions-bookmark.sortInstalled",
+          "when": "extensions-bookmark.sort != 'Installed'",
+          "group": "1_sort@7"
+        },
+        {
+          "command": "extensions-bookmark.sortInstalledCurrent",
+          "when": "extensions-bookmark.sort == 'Installed'",
+          "group": "1_sort@7"
+        },
+        {
+          "command": "extensions-bookmark.sortMissing",
+          "when": "extensions-bookmark.sort != 'Missing'",
+          "group": "1_sort@8"
+        },
+        {
+          "command": "extensions-bookmark.sortMissingCurrent",
+          "when": "extensions-bookmark.sort == 'Missing'",
+          "group": "1_sort@8"
         }
       ],
       "view/item/context": [
         {
+          "command": "extensions-bookmark.inlineWanted",
+          "when": "view == extensionsBookmarkView && viewItem =~ /^bookmark\\.wanted\\./",
+          "group": "inline@1"
+        },
+        {
+          "command": "extensions-bookmark.inlineUnwanted",
+          "when": "view == extensionsBookmarkView && viewItem =~ /^bookmark\\.unwanted\\./",
+          "group": "inline@1"
+        },
+        {
+          "command": "extensions-bookmark.inlineInstalled",
+          "when": "view == extensionsBookmarkView && viewItem =~ /\\.installed$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "extensions-bookmark.inlineMissing",
+          "when": "view == extensionsBookmarkView && viewItem =~ /\\.missing$/",
+          "group": "inline@2"
+        },
+        {
           "command": "extensions-bookmark.removeBookmark",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
+          "group": "0_extension_bookmarker@1",
+          "when": "view == extensionsBookmarkView && viewItem =~ /^bookmark\\./"
+        },
+        {
+          "command": "extensions-bookmark.moveBookmark",
+          "group": "0_extension_bookmarker@2",
+          "when": "view == extensionsBookmarkView && viewItem =~ /^bookmark\\./"
+        },
+        {
+          "command": "extensions-bookmark.openExtension",
+          "group": "0_extension_bookmarker@3",
+          "when": "view == extensionsBookmarkView && viewItem =~ /^bookmark\\./"
         },
         {
           "command": "extensions-bookmark.renameCategory",
           "group": "1_category",
-          "when": "view == extensionsBookmarkView && viewItem == category && viewItem != defaultCategory"
+          "when": "view == extensionsBookmarkView && viewItem == category"
         },
         {
           "command": "extensions-bookmark.removeCategory",
           "group": "1_category",
-          "when": "view == extensionsBookmarkView && viewItem == category && viewItem != defaultCategory"
-        },
-        {
-          "command": "extensions-bookmark.moveBookmark",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
-        },
-        {
-          "command": "extensions-bookmark.addTagToBookmark",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
-        },
-        {
-          "command": "extensions-bookmark.removeTagFromBookmark",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
-        },
-        {
-          "command": "extensions-bookmark.addNote",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
-        },
-        {
-          "command": "extensions-bookmark.editNote",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
-        },
-        {
-          "command": "extensions-bookmark.removeNote",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
-        },
-        {
-          "command": "extensions-bookmark.viewDetails",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
-        },
-        {
-          "command": "extensions-bookmark.openExtension",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
-        },
-        {
-          "command": "extensions-bookmark.toggleWanted",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
-        },
-        {
-          "command": "extensions-bookmark.syncExtension",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == bookmarkedExtension"
+          "when": "view == extensionsBookmarkView && viewItem == category"
         },
         {
           "command": "extensions-bookmark.addExtraToBookmarks",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == extraExtension"
+          "group": "0_extension_bookmarker@1",
+          "when": "view == extensionsBookmarkView && viewItem == extra.installed"
         },
         {
           "command": "extensions-bookmark.openExtension",
-          "group": "0_extension_bookmarker",
-          "when": "view == extensionsBookmarkView && viewItem == extraExtension"
+          "group": "0_extension_bookmarker@7",
+          "when": "view == extensionsBookmarkView && viewItem == extra.installed"
         }
       ]
     }

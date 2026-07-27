@@ -3,7 +3,31 @@ Changelog
 
 All notable changes to Extensions Bookmark will be documented in this file.
 
-CURRENT VERSION - 1.2.1
+CURRENT VERSION - 1.3.0
+-----------------------
+### CHANGES
+
+- **Details panel rebuilt as a native TreeView.** Replaces the old Webview with a property-row list (Wanted / Installed / ID / Category / Downloads / Rating / Updated / Added / Note / Open in Marketplace). Click any row to copy its value; click Note to edit via an InputBox. Selecting a bookmark in the List tree drives the Details tree.
+- **Dual-emoji status.** Each bookmark now shows `⭐`/`🚫` (wanted) + `✅`/`❌` (installed) next to its name; unbookmarked-installed items show `🆕`. Labels are clean — emojis no longer appended to the name.
+- **Removed tags.** The tags system (global tag list, per-bookmark tags, tag commands) is gone. On first launch after upgrade the store migrates to schema v2 and silently drops all tag data; bookmarks, categories, and notes are preserved.
+- **Group By submenu.** Category / Wanted / Installed / Time Added / Flat grouping, current marked with ✓.
+- **Filter By submenu.** All / Installed / Not Installed / Wanted / Not Wanted / Added in 1 day / 1 week / 1 month. Search honors the active filter.
+- **Sort By submenu.** Name A→Z / Z→A, Added New→Old / Old→New, Wanted First / Not Wanted First, Installed First / Missing First. Each option falls back to name then date.
+- **Inline action buttons** on each bookmark row: toggle Wanted (⭐/🚫) and install/uninstall (✅/❌). Multi-select supported.
+- **Search shows id + status.** The Search quick-pick lists each result with `id · ⭐ ✅` and matches name, id, and status; results respect the active filter.
+- **Add Bookmark is its own toolbar button** (one-click). Remaining actions live in the title overflow menu.
+- **Expand All / Collapse All** toolbar buttons (toggle by tree state).
+- Status emojis moved to the leading icon + inline buttons; the description now shows the extension id.
+- Code split into `src/` modules (`store`, `visuals`, `installed`, `marketplace`, `provider`, `detailsView`, `expansion`, `commands`, `logger`).
+
+### Fixes
+
+- Fixed `Install` / `Uninstall` inline buttons being no-ops (they now force the action regardless of `wantedInstall`, and keep data consistent).
+- Fixed stale tree nodes after rename/category switch causing reveal to misplace (node caches cleared on refresh).
+- Fixed tree expand state context key drifting after manual collapse.
+- Reduced duplicate store reads and extension scans when expanding groups.
+
+1.2.1
 -----------------------
 ### CHANGES
 
