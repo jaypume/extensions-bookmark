@@ -3,7 +3,13 @@ Changelog
 
 All notable changes to Extensions Bookmark will be documented in this file.
 
-CURRENT VERSION - 1.2.0
+CURRENT VERSION - 1.2.1
+-----------------------
+### CHANGES
+
+- Unbookmarked installed extensions (🆕) now show their own extension icon instead of the fallback codicon.
+
+1.2.0
 -----------------------
 ### CHANGES
 

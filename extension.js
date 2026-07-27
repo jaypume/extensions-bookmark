@@ -50,9 +50,14 @@ function computeExtraBookmarks(installedSet) {
         if (lower.startsWith('vscode.')) continue;
         if (known.has(lower)) continue;
         if (!installedSet.has(lower)) continue;
-        const displayName = (ext.packageJSON && ext.packageJSON.displayName) || id;
+        const pkg = ext.packageJSON || {};
+        const displayName = pkg.displayName || id;
+        const iconPath = pkg.icon
+            ? vscode.Uri.joinPath(ext.extensionUri, pkg.icon).toString()
+            : undefined;
         result.push({
             id, displayName,
+            icon: iconPath,
             category: 'Default',
             extra: true,
             dateAdded: ''
