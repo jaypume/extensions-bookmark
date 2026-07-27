@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to Extensions Bookmark will be documented in this file.
 
+CURRENT VERSION - 1.3.3
+-----------------------
+### CHANGES
+
+- **Session state no longer touches disk.** `groupBy`, `sortingOption`, `statusFilter`, and `inputQuery` are kept in memory only — they reset to defaults on window reload. `data.json` now carries just bookmarks, categories, and schemaVersion, so version-control diffs stay clean. On upgrade, any session keys previously written into `data.json` are stripped out automatically.
+
 CURRENT VERSION - 1.3.2
 -----------------------
 ### CHANGES
