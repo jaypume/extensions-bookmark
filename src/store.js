@@ -16,7 +16,7 @@ const vscode = require('vscode');
 const DATA_FILE = 'data.json';
 const SCHEMA_VERSION = 2;
 
-const GROUP_BY_VALUES = ['category', 'wanted', 'installed', 'age', 'flat'];
+const GROUP_BY_VALUES = ['recent', 'category', 'wanted', 'installed', 'age', 'flat'];
 const SORTING_VALUES = ['A-Z', 'Z-A', 'New-Old', 'Old-New', 'Wanted', 'Unwanted', 'Installed', 'Missing'];
 const FILTER_VALUES = ['all', 'installed', 'uninstalled', 'wanted', 'unwanted', 'no-category', 'added-1d', 'added-1w', 'added-1m', 'input'];
 
@@ -86,12 +86,19 @@ function sortKeys(value) {
     return value;
 }
 
-/** Persist the whole state atomically. */
+/** Persist the whole state atomically. Bookmarks are sorted by id for a
+ *  stable, diff-friendly file; other arrays (e.g. categories) keep insertion order. */
 function write(state) {
     if (!file) return;
     try {
+        const sorted = sortKeys(state);
+        if (Array.isArray(sorted.bookmarks)) {
+            sorted.bookmarks = sorted.bookmarks
+                .slice()
+                .sort((a, b) => String(a?.id || '').localeCompare(String(b?.id || '')));
+        }
         fs.mkdirSync(path.dirname(file), { recursive: true });
-        fs.writeFileSync(file, `${JSON.stringify(sortKeys(state), null, 2)}\n`, 'utf8');
+        fs.writeFileSync(file, `${JSON.stringify(sorted, null, 2)}\n`, 'utf8');
     } catch (e) {
         console.warn('[extensions-bookmark] write store failed:', e);
     }

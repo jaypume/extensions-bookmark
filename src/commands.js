@@ -54,9 +54,17 @@ function bookmarksForIds(ids) {
 }
 
 function registerCommands(deps) {
-    const { provider, details, treeView } = deps;
+    const { provider, details, treeView, recent } = deps;
     const subs = [];
     const reg = (name, fn) => subs.push(vscode.commands.registerCommand(cmd(name), fn));
+    // Record touched ids into the recent history (best-effort, never throws).
+    const touchRecent = (ids) => {
+        if (!recent || !ids) return;
+        try {
+            const arr = Array.isArray(ids) ? ids : [ids];
+            for (const id of arr) if (id) recent.touch(id);
+        } catch (_) { /* ignore */ }
+    };
 
     // --- groupBy (submenu): category / status / flat ---
     async function setGroupBy(mode) {
@@ -66,11 +74,13 @@ function registerCommands(deps) {
         provider.refresh();
     }
     reg('groupByCategory', () => setGroupBy('category'));
+    reg('groupByRecent', () => setGroupBy('recent'));
     reg('groupByWanted', () => setGroupBy('wanted'));
     reg('groupByInstalled', () => setGroupBy('installed'));
     reg('groupByAge', () => setGroupBy('age'));
     reg('groupByFlat', () => setGroupBy('flat'));
     reg('groupByCategoryCurrent', () => setGroupBy('category'));
+    reg('groupByRecentCurrent', () => setGroupBy('recent'));
     reg('groupByWantedCurrent', () => setGroupBy('wanted'));
     reg('groupByInstalledCurrent', () => setGroupBy('installed'));
     reg('groupByAgeCurrent', () => setGroupBy('age'));
@@ -139,6 +149,7 @@ function registerCommands(deps) {
             bookmark.wantedInstall = bookmark.wantedInstall === false;
         }
         store.update('bookmarks', bookmarks);
+        touchRecent(ids);
         provider.refresh();
         details.refresh();
         if (targets.length === 1) {
@@ -235,6 +246,7 @@ function registerCommands(deps) {
                 }
             }
         );
+        touchRecent(targets.map(b => b.id));
         refreshAfterSync();
         if (uninstalled) {
             const reload = 'Reload Window';
@@ -341,6 +353,7 @@ function registerCommands(deps) {
             }
             bookmarks.push(bookmark);
             await store.update('bookmarks', bookmarks);
+            touchRecent(selectedExtension);
             provider.refresh();
             vscode.window.showInformationMessage(`Extension ${selectedExtension} has been bookmarked.`);
         } catch (error) {
@@ -401,6 +414,7 @@ function registerCommands(deps) {
         );
         if (added.length) {
             await store.update('bookmarks', existing);
+            touchRecent(added);
             provider.refresh();
         }
         const msg = `Added ${added.length}${skipped ? `, skipped ${skipped} existing` : ''}${failed.length ? `, failed ${failed.length}` : ''}.`;
@@ -469,6 +483,7 @@ function registerCommands(deps) {
 
         if (added.length > 0) {
             await store.update('bookmarks', bookmarks);
+            touchRecent(added);
             provider.refresh();
         }
         notify();
@@ -508,6 +523,7 @@ function registerCommands(deps) {
         const removed = bookmarks.filter(b => lower.has(String(b.id).toLowerCase()));
         const next = bookmarks.filter(b => !lower.has(String(b.id).toLowerCase()));
         await store.update('bookmarks', next);
+        touchRecent(removed.map(b => b.id));
         provider.refresh();
         if (details.bookmarkId && lower.has(String(details.bookmarkId).toLowerCase())) details.show(null);
         const names = removed.map(b => b.displayName).join(', ');

@@ -13,6 +13,7 @@ const {
     buildIconPath
 } = require('./visuals');
 const { computeInstalledSet, computeExtraBookmarks } = require('./installed');
+const recent = require('./recent');
 
 function getRecentHours() {
     const hours = vscode.workspace.getConfiguration('extensionsBookmark').get('recentHours', 12);
@@ -212,6 +213,7 @@ class BookmarkTreeProvider {
         const isBookmark = element.contextValue.startsWith('bookmark.');
         if (!isBookmark) return undefined;
         if (this.groupBy === 'category') return this.getCategoryItem(element.category);
+        // recent and flat are flat lists — no parent.
         if (this.groupBy === 'wanted' || this.groupBy === 'installed' || this.groupBy === 'age') {
             return this.getGroupItem(this.groupBy, this._bucketKeyForBookmark(element.bookmarkId));
         }
@@ -306,6 +308,26 @@ class BookmarkTreeProvider {
         }
 
         // Root level.
+        if (this.groupBy === 'recent') {
+            // Last N touched ids (newest first), resolved against current
+            // bookmarks + extras. Removed bookmarks are skipped (no longer exist).
+            const history = recent.list();
+            const bookmarks = store.get('bookmarks', []);
+            const byId = new Map();
+            for (const bm of bookmarks) byId.set(String(bm.id).toLowerCase(), bm);
+            const extras = computeExtraBookmarks(installedSet);
+            for (const ex of extras) byId.set(String(ex.id).toLowerCase(), ex);
+            const items = [];
+            for (const entry of history) {
+                const bm = byId.get(String(entry.id).toLowerCase());
+                if (!bm) continue; // removed or no longer installed/bookmarked
+                const d = bm.extra ? decorateExtra(bm) : decorateBookmark(bm, installedSet);
+                if (!passesFilter(d, this.statusFilter, this.inputQuery)) continue;
+                items.push(this.getBookmarkItem(d.bookmark, installedSet, `recent:${entry.id}`));
+            }
+            return items;
+        }
+
         if (this.groupBy === 'flat') {
             const sortingOption = store.get('sortingOption', 'A-Z');
             const visible = this._visibleDecorated(installedSet);

@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to Extensions Bookmark will be documented in this file.
 
+CURRENT VERSION - 1.3.2
+-----------------------
+### CHANGES
+
+- **Group by Recently Used.** New Group By option (top of the list) showing the last 20 extensions you touched (install/uninstall/remove/toggle/add), newest first. Tracked in a standalone local file (`recent.json`), never written to `data.json` and not synced.
+- **data.json now sorted by id** for a stable, diff-friendly file (UI ordering unchanged).
+
 CURRENT VERSION - 1.3.1
 -----------------------
 ### CHANGES

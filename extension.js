@@ -5,6 +5,7 @@
 const vscode = require('vscode');
 const store = require('./src/store');
 const { initLogger, logInfo, logError, showLog } = require('./src/logger');
+const recent = require('./src/recent');
 const { BookmarkTreeProvider } = require('./src/provider');
 const { DetailsTreeProvider } = require('./src/detailsView');
 const { registerCommands } = require('./src/commands');
@@ -20,6 +21,7 @@ function activate(context) {
         store.init(context);
         store.migrate().catch(error => logError('Data migration failed', error));
         store.migrateStoredState();
+        recent.init(context);
 
         const provider = new BookmarkTreeProvider();
         logInfo('Registering List tree data provider');
@@ -57,7 +59,7 @@ function activate(context) {
         // Ensure categories array exists.
         if (!Array.isArray(store.get('categories', []))) store.update('categories', []);
 
-        context.subscriptions.push(...registerCommands({ provider, details, treeView }));
+        context.subscriptions.push(...registerCommands({ provider, details, treeView, recent }));
 
         context.subscriptions.push(...registerTreeExpansion(
             treeView, provider, 'extensionsBookmarkView',

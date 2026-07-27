@@ -3,7 +3,7 @@
   "displayName": "Extensions Bookmark",
   "description": "Bookmark Visual Studio Code extensions for later use.",
   "icon": "media/extension-bookmarker-logo.png",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "publisher": "pujie",
   "repository": {
     "type": "git",
@@ -72,7 +72,8 @@
     "onCommand:extensions-bookmark.sortMissing",
     "onCommand:extensions-bookmark.sortMissingCurrent",
     "onCommand:extensions-bookmark.filterInput",
-    "onCommand:extensions-bookmark.filterNoCategory"
+    "onCommand:extensions-bookmark.filterNoCategory",
+    "onCommand:extensions-bookmark.groupByRecent"
   ],
   "main": "./extension",
   "contributes": {
@@ -406,6 +407,15 @@
         "title": "✓ Category"
       },
       {
+        "command": "extensions-bookmark.groupByRecent",
+        "title": "Recently Used",
+        "icon": "$(history)"
+      },
+      {
+        "command": "extensions-bookmark.groupByRecentCurrent",
+        "title": "Recently Used"
+      },
+      {
         "command": "extensions-bookmark.groupByWanted",
         "title": "Wanted",
         "icon": "$(star-full)"
@@ -682,6 +692,14 @@
         {
           "command": "extensions-bookmark.filterNoCategoryCurrent",
           "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.groupByRecent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.groupByRecentCurrent",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -753,54 +771,64 @@
       ],
       "extensions-bookmark.groupBy": [
         {
+          "command": "extensions-bookmark.groupByRecent",
+          "when": "extensions-bookmark.groupBy != 'recent'",
+          "group": "1_group@1"
+        },
+        {
+          "command": "extensions-bookmark.groupByRecentCurrent",
+          "when": "extensions-bookmark.groupBy == 'recent'",
+          "group": "1_group@1"
+        },
+        {
           "command": "extensions-bookmark.groupByCategory",
           "when": "extensions-bookmark.groupBy != 'category'",
-          "group": "1_group@1"
+          "group": "1_group@2"
         },
         {
           "command": "extensions-bookmark.groupByCategoryCurrent",
           "when": "extensions-bookmark.groupBy == 'category'",
-          "group": "1_group@1"
+          "group": "1_group@2"
         },
         {
           "command": "extensions-bookmark.groupByWanted",
           "when": "extensions-bookmark.groupBy != 'wanted'",
-          "group": "1_group@2"
+          "group": "1_group@3"
         },
         {
           "command": "extensions-bookmark.groupByWantedCurrent",
           "when": "extensions-bookmark.groupBy == 'wanted'",
-          "group": "1_group@2"
+          "group": "1_group@3"
         },
         {
           "command": "extensions-bookmark.groupByInstalled",
           "when": "extensions-bookmark.groupBy != 'installed'",
-          "group": "1_group@3"
+          "group": "1_group@4"
         },
         {
           "command": "extensions-bookmark.groupByInstalledCurrent",
           "when": "extensions-bookmark.groupBy == 'installed'",
-          "group": "1_group@3"
+          "group": "1_group@4"
         },
         {
           "command": "extensions-bookmark.groupByAge",
           "when": "extensions-bookmark.groupBy != 'age'",
-          "group": "1_group@4"
+          "group": "1_group@5"
         },
         {
           "command": "extensions-bookmark.groupByAgeCurrent",
           "when": "extensions-bookmark.groupBy == 'age'",
-          "group": "1_group@4"
+          "group": "1_group@5"
         },
         {
           "command": "extensions-bookmark.groupByFlat",
           "when": "extensions-bookmark.groupBy != 'flat'",
-          "group": "1_group@5"
+          "group": "1_group@6"
         },
         {
           "command": "extensions-bookmark.groupByFlatCurrent",
           "when": "extensions-bookmark.groupBy == 'flat'",
-          "group": "1_group@5"
+          "group": "1_group@6"
         }
       ],
       "extensions-bookmark.filterBy": [
