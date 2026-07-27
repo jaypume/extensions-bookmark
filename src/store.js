@@ -18,7 +18,7 @@ const SCHEMA_VERSION = 2;
 
 const GROUP_BY_VALUES = ['category', 'wanted', 'installed', 'age', 'flat'];
 const SORTING_VALUES = ['A-Z', 'Z-A', 'New-Old', 'Old-New', 'Wanted', 'Unwanted', 'Installed', 'Missing'];
-const FILTER_VALUES = ['all', 'installed', 'uninstalled', 'wanted', 'unwanted', 'added-1d', 'added-1w', 'added-1m'];
+const FILTER_VALUES = ['all', 'installed', 'uninstalled', 'wanted', 'unwanted', 'no-category', 'added-1d', 'added-1w', 'added-1m', 'input'];
 
 const DEFAULTS = {
     schemaVersion: SCHEMA_VERSION,
@@ -27,6 +27,7 @@ const DEFAULTS = {
     sortingOption: 'A-Z',
     groupBy: 'category',       // 'category' | 'status' | 'flat'
     statusFilter: 'all',
+    inputQuery: '',
     statusFilterVersion: 1
 };
 
@@ -176,6 +177,7 @@ function normalize(o) {
     if (o.statusFilterVersion === 1 && isFilter(o.statusFilter)) {
         out.statusFilter = o.statusFilter;
     }
+    if (typeof o.inputQuery === 'string') out.inputQuery = o.inputQuery;
     return out;
 }
 

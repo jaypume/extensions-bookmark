@@ -84,19 +84,46 @@ function registerCommands(deps) {
         await vscode.commands.executeCommand('setContext', CTX_FILTER, value);
         provider.refresh();
     }
+    // Filter by input string: prompt once, then persist as the active filter
+    // until the user switches to another filter option.
+    reg('filterInput', async () => {
+        const value = await vscode.window.showInputBox({
+            prompt: 'Filter bookmarks by name or id (substring match)',
+            value: provider.inputQuery || '',
+            placeHolder: 'e.g. git',
+        });
+        if (value === undefined) return; // Esc cancelled
+        provider.inputQuery = value.trim();
+        await store.update('inputQuery', provider.inputQuery);
+        await setFilter('input');
+    });
     reg('filterAll', () => setFilter('all'));
     reg('filterInstalled', () => setFilter('installed'));
     reg('filterUninstalled', () => setFilter('uninstalled'));
     reg('filterWanted', () => setFilter('wanted'));
     reg('filterUnwanted', () => setFilter('unwanted'));
+    reg('filterNoCategory', () => setFilter('no-category'));
     reg('filterAdded1d', () => setFilter('added-1d'));
     reg('filterAdded1w', () => setFilter('added-1w'));
     reg('filterAdded1m', () => setFilter('added-1m'));
+    reg('filterInputCurrent', async () => {
+        // Re-prompt even when already active, so the user can refine the query.
+        const value = await vscode.window.showInputBox({
+            prompt: 'Filter bookmarks by name or id (substring match)',
+            value: provider.inputQuery || '',
+            placeHolder: 'e.g. git',
+        });
+        if (value === undefined) return;
+        provider.inputQuery = value.trim();
+        await store.update('inputQuery', provider.inputQuery);
+        await setFilter('input');
+    });
     reg('filterAllCurrent', () => setFilter('all'));
     reg('filterInstalledCurrent', () => setFilter('installed'));
     reg('filterUninstalledCurrent', () => setFilter('uninstalled'));
     reg('filterWantedCurrent', () => setFilter('wanted'));
     reg('filterUnwantedCurrent', () => setFilter('unwanted'));
+    reg('filterNoCategoryCurrent', () => setFilter('no-category'));
     reg('filterAdded1dCurrent', () => setFilter('added-1d'));
     reg('filterAdded1wCurrent', () => setFilter('added-1w'));
     reg('filterAdded1mCurrent', () => setFilter('added-1m'));
@@ -289,7 +316,6 @@ function registerCommands(deps) {
 
     // --- add bookmark ---
     reg('addBookmark', async () => {
-        const categories = store.get('categories', []);
         const bookmarks = store.get('bookmarks', []);
         const input = await vscode.window.showInputBox({
             prompt: 'Enter the identifier of the extension (publisher.extensionname)'
@@ -307,13 +333,8 @@ function registerCommands(deps) {
             return;
         }
 
-        const selectedCategory = await vscode.window.showQuickPick(sortedCategories(categories), {
-            placeHolder: 'Select a category for the bookmark'
-        });
-        if (!selectedCategory) return;
-
         try {
-            const bookmark = await fetchMarketplaceBookmark(selectedExtension, selectedCategory);
+            const bookmark = await fetchMarketplaceBookmark(selectedExtension, 'Default');
             if (!bookmark) {
                 vscode.window.showErrorMessage(`Extension ${selectedExtension} not found.`);
                 return;
@@ -329,37 +350,62 @@ function registerCommands(deps) {
     });
 
     // Bookmark an installed-but-unbookmarked extension surfaced via the Diff bucket.
-    reg('addExtraToBookmarks', async (itemOrId) => {
-        const extensionId = typeof itemOrId === 'string'
-            ? itemOrId
-            : idFromItem(itemOrId);
-        if (!extensionId) return;
-        const categories = store.get('categories', []);
-        const bookmarks = store.get('bookmarks', []);
-        if (bookmarks.some(bookmark => String(bookmark.id).toLowerCase() === extensionId.toLowerCase())) {
-            vscode.window.showInformationMessage(`Bookmark ${extensionId} already exists.`);
+    reg('addExtraToBookmarks', async (itemOrId, selection) => {
+        // Collect ids: inline/click passes a single item or id; multi-select
+        // passes (item, selectedItems). Dedup case-insensitively.
+        const rawIds = [];
+        const pushId = (v) => {
+            const id = typeof v === 'string' ? v : idFromItem(v);
+            if (id) rawIds.push(id);
+        };
+        if (Array.isArray(selection) && selection.length) selection.forEach(pushId);
+        else if (itemOrId !== undefined) pushId(itemOrId);
+        const seen = new Set();
+        const ids = rawIds.filter(id => {
+            const k = String(id).toLowerCase();
+            if (seen.has(k)) return false;
+            seen.add(k); return true;
+        });
+        if (ids.length === 0) return;
+
+        const existing = store.get('bookmarks', []);
+        const known = new Set(existing.map(b => String(b.id).toLowerCase()));
+        const pending = ids.filter(id => !known.has(String(id).toLowerCase()));
+        const skipped = ids.length - pending.length;
+        if (pending.length === 0) {
+            vscode.window.showInformationMessage(`Already bookmarked (${skipped}).`);
             return;
         }
-        const selectedCategory = await vscode.window.showQuickPick(sortedCategories(categories), {
-            placeHolder: `Select a category for ${extensionId}`
-        });
-        if (!selectedCategory) return;
-        try {
-            let bookmark = null;
-            try {
-                bookmark = await fetchMarketplaceBookmark(extensionId, selectedCategory);
-            } catch (marketError) {
-                logError(`Marketplace lookup failed for ${extensionId}, using local data`, marketError);
+
+        const added = [];
+        const failed = [];
+        await vscode.window.withProgress(
+            { location: vscode.ProgressLocation.Notification, title: 'Adding bookmarks', cancellable: false },
+            async (progress) => {
+                for (let i = 0; i < pending.length; i++) {
+                    const extensionId = pending[i];
+                    progress.report({ increment: pending.length ? 100 / pending.length : 100, message: `${i + 1}/${pending.length}: ${extensionId}` });
+                    try {
+                        let bookmark = null;
+                        try { bookmark = await fetchMarketplaceBookmark(extensionId, 'Default'); }
+                        catch (marketError) { logError(`Marketplace lookup failed for ${extensionId}, using local data`, marketError); }
+                        if (!bookmark) bookmark = buildBookmarkFromLocal(extensionId, 'Default');
+                        existing.push(bookmark);
+                        added.push(extensionId);
+                    } catch (error) {
+                        logError(`Failed to add bookmark ${extensionId}`, error);
+                        failed.push(extensionId);
+                    }
+                }
             }
-            if (!bookmark) bookmark = buildBookmarkFromLocal(extensionId, selectedCategory);
-            bookmarks.push(bookmark);
-            await store.update('bookmarks', bookmarks);
+        );
+        if (added.length) {
+            await store.update('bookmarks', existing);
             provider.refresh();
-            vscode.window.showInformationMessage(`Extension ${extensionId} has been bookmarked.`);
-        } catch (error) {
-            logError(`Failed to add bookmark ${extensionId}`, error);
-            vscode.window.showErrorMessage(`Failed to add bookmark for ${extensionId}: ${error?.message || error}`);
         }
+        const msg = `Added ${added.length}${skipped ? `, skipped ${skipped} existing` : ''}${failed.length ? `, failed ${failed.length}` : ''}.`;
+        if (failed.length) vscode.window.showWarningMessage(msg);
+        else vscode.window.showInformationMessage(msg);
     });
 
     reg('addFromList', async () => {
@@ -403,12 +449,6 @@ function registerCommands(deps) {
         };
         if (pending.length === 0) { notify(); return; }
 
-        const categories = store.get('categories', []);
-        const category = await vscode.window.showQuickPick(sortedCategories(categories), {
-            placeHolder: 'Select a category for the bookmarks'
-        });
-        if (!category) return;
-
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: 'Adding bookmarks from list', cancellable: false },
             async progress => {
@@ -416,7 +456,7 @@ function registerCommands(deps) {
                     const id = pending[index];
                     progress.report({ increment: pending.length ? 100 / pending.length : 100, message: `${index + 1}/${pending.length}: ${id}` });
                     try {
-                        const bookmark = await fetchMarketplaceBookmark(id, category);
+                        const bookmark = await fetchMarketplaceBookmark(id, 'Default');
                         if (bookmark) { bookmarks.push(bookmark); added.push(id); }
                         else failed.push(id);
                     } catch (error) {
@@ -532,6 +572,8 @@ function registerCommands(deps) {
                     bookmarks.forEach(b => { if (b.category === selectedCategory) b.category = newCategoryName; });
                     await store.update('categories', categories);
                     await store.update('bookmarks', bookmarks);
+                    provider.invalidateCategory(selectedCategory);
+                    provider.invalidateCategory(newCategoryName);
                     provider.refresh();
                     vscode.window.showInformationMessage(`Category ${selectedCategory} has been renamed to ${newCategoryName}.`);
                 }
@@ -841,11 +883,29 @@ function registerCommands(deps) {
         }
     });
 
-    // --- inline action buttons on each bookmark row (forward to the commands above) ---
-    // wanted row shows ⭐ → toggle to unwanted; unwanted row shows 🚫 → toggle to wanted.
-    reg('inlineWanted', (item, selection) => vscode.commands.executeCommand(cmd('toggleWanted'), item, selection));
-    reg('inlineUnwanted', (item, selection) => vscode.commands.executeCommand(cmd('toggleWanted'), item, selection));
-    // installed row shows ✅ → uninstall; missing row shows ❌ → install.
+    // --- inline action buttons on each bookmark row ---
+    // ⭐/🚫 toggle wanted, then auto-sync install state to match (unwanted+installed → uninstall,
+    // wanted+missing → install). Only the clicked row is synced.
+    async function toggleWantedAndSync(item, selection) {
+        const ids = idsFromArgs(item, selection);
+        if (ids.length === 0) return;
+        const bookmarks = store.get('bookmarks', []);
+        const lower = new Set(ids.map(id => String(id).toLowerCase()));
+        const targets = bookmarks.filter(b => lower.has(String(b.id).toLowerCase()));
+        if (targets.length === 0) return;
+        for (const bm of targets) bm.wantedInstall = bm.wantedInstall === false;
+        await store.update('bookmarks', bookmarks);
+        provider.refresh();
+        details.refresh();
+        // Sync each target toward its new wanted state.
+        const toInstall = targets.filter(b => b.wantedInstall !== false && !isInstalled(b.id)).map(b => b.id);
+        const toUninstall = targets.filter(b => b.wantedInstall === false && isInstalled(b.id)).map(b => b.id);
+        if (toInstall.length) await applyMany(toInstall, 'Install', true);
+        if (toUninstall.length) await applyMany(toUninstall, 'Uninstall', false);
+    }
+    reg('inlineWanted', toggleWantedAndSync);
+    reg('inlineUnwanted', toggleWantedAndSync);
+    // ✅ → uninstall; ❌ → install.
     reg('inlineInstalled', (item, selection) => vscode.commands.executeCommand(cmd('uninstallSelected'), item, selection));
     reg('inlineMissing', (item, selection) => vscode.commands.executeCommand(cmd('installSelected'), item, selection));
 

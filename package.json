@@ -3,7 +3,7 @@
   "displayName": "Extensions Bookmark",
   "description": "Bookmark Visual Studio Code extensions for later use.",
   "icon": "media/extension-bookmarker-logo.png",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "publisher": "pujie",
   "repository": {
     "type": "git",
@@ -70,7 +70,9 @@
     "onCommand:extensions-bookmark.sortInstalled",
     "onCommand:extensions-bookmark.sortInstalledCurrent",
     "onCommand:extensions-bookmark.sortMissing",
-    "onCommand:extensions-bookmark.sortMissingCurrent"
+    "onCommand:extensions-bookmark.sortMissingCurrent",
+    "onCommand:extensions-bookmark.filterInput",
+    "onCommand:extensions-bookmark.filterNoCategory"
   ],
   "main": "./extension",
   "contributes": {
@@ -299,6 +301,14 @@
         "title": "✓ Not Wanted"
       },
       {
+        "command": "extensions-bookmark.filterNoCategory",
+        "title": "No Category"
+      },
+      {
+        "command": "extensions-bookmark.filterNoCategoryCurrent",
+        "title": "✓ No Category"
+      },
+      {
         "command": "extensions-bookmark.filterAdded1d",
         "title": "Added in 1 day"
       },
@@ -430,6 +440,14 @@
       {
         "command": "extensions-bookmark.groupByFlatCurrent",
         "title": "✓ Flat"
+      },
+      {
+        "command": "extensions-bookmark.filterInput",
+        "title": "By Input…"
+      },
+      {
+        "command": "extensions-bookmark.filterInputCurrent",
+        "title": "✓ Input Filter"
       }
     ],
     "configuration": {
@@ -648,6 +666,22 @@
         {
           "command": "extensions-bookmark.sortMissingCurrent",
           "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterInput",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterInputCurrent",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterNoCategory",
+          "when": "false"
+        },
+        {
+          "command": "extensions-bookmark.filterNoCategoryCurrent",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -771,6 +805,16 @@
       ],
       "extensions-bookmark.filterBy": [
         {
+          "command": "extensions-bookmark.filterInput",
+          "when": "extensions-bookmark.filter != 'input'",
+          "group": "0_input@1"
+        },
+        {
+          "command": "extensions-bookmark.filterInputCurrent",
+          "when": "extensions-bookmark.filter == 'input'",
+          "group": "0_input@1"
+        },
+        {
           "command": "extensions-bookmark.filterAll",
           "when": "extensions-bookmark.filter != 'all'",
           "group": "1_filter@1"
@@ -821,34 +865,44 @@
           "group": "1_filter@5"
         },
         {
+          "command": "extensions-bookmark.filterNoCategory",
+          "when": "extensions-bookmark.filter != 'no-category'",
+          "group": "1_filter@6"
+        },
+        {
+          "command": "extensions-bookmark.filterNoCategoryCurrent",
+          "when": "extensions-bookmark.filter == 'no-category'",
+          "group": "1_filter@6"
+        },
+        {
           "command": "extensions-bookmark.filterAdded1d",
           "when": "extensions-bookmark.filter != 'added-1d'",
-          "group": "1_filter@6"
+          "group": "1_filter@7"
         },
         {
           "command": "extensions-bookmark.filterAdded1dCurrent",
           "when": "extensions-bookmark.filter == 'added-1d'",
-          "group": "1_filter@6"
+          "group": "1_filter@7"
         },
         {
           "command": "extensions-bookmark.filterAdded1w",
           "when": "extensions-bookmark.filter != 'added-1w'",
-          "group": "1_filter@7"
+          "group": "1_filter@8"
         },
         {
           "command": "extensions-bookmark.filterAdded1wCurrent",
           "when": "extensions-bookmark.filter == 'added-1w'",
-          "group": "1_filter@7"
+          "group": "1_filter@8"
         },
         {
           "command": "extensions-bookmark.filterAdded1m",
           "when": "extensions-bookmark.filter != 'added-1m'",
-          "group": "1_filter@8"
+          "group": "1_filter@9"
         },
         {
           "command": "extensions-bookmark.filterAdded1mCurrent",
           "when": "extensions-bookmark.filter == 'added-1m'",
-          "group": "1_filter@8"
+          "group": "1_filter@9"
         }
       ],
       "extensions-bookmark.sortBy": [

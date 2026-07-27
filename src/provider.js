@@ -31,12 +31,23 @@ function wasAddedBefore(bookmark, days) {
     return Date.now() - t <= days * 24 * 60 * 60 * 1000;
 }
 
-function passesFilter(d, statusFilter) {
+function matchesInput(bookmark, query) {
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return (bookmark.displayName || '').toLowerCase().includes(q)
+        || String(bookmark.id || '').toLowerCase().includes(q);
+}
+
+function passesFilter(d, statusFilter, inputQuery) {
+    if (statusFilter === 'input') {
+        return matchesInput(d.bookmark, inputQuery);
+    }
     switch (statusFilter) {
         case 'installed':    return d.actual;
         case 'uninstalled':  return !d.actual;
         case 'wanted':       return d.want !== false && !d.extra;
         case 'unwanted':     return d.want === false;
+        case 'no-category':  return !d.extra && (d.bookmark.category || 'Default') === 'Default';
         case 'added-1d':     return wasAddedBefore(d.bookmark, 1);
         case 'added-1w':     return wasAddedBefore(d.bookmark, 7);
         case 'added-1m':     return wasAddedBefore(d.bookmark, 30);
@@ -83,11 +94,11 @@ function toBookmarkTreeItem(d) {
 // --- generic grouping engine (category | status | age | flat) ---
 
 const DAY = 24 * 60 * 60 * 1000;
-const AGE_BUCKETS = ['__lt1d__', '__lt1w__', '__lt1m__', '__gt1m__'];
+const AGE_BUCKETS = ['__none__', '__lt1d__', '__lt1w__', '__lt1m__', '__gt1m__'];
 
 function ageKey(dateAdded) {
     const t = new Date(dateAdded).getTime();
-    if (!Number.isFinite(t)) return '__gt1m__'; // unknown age → oldest bucket
+    if (!Number.isFinite(t)) return '__none__'; // no dateAdded → "Not Added"
     const age = Date.now() - t;
     if (age < 1 * DAY) return '__lt1d__';
     if (age < 7 * DAY) return '__lt1w__';
@@ -104,8 +115,7 @@ function bucketKey(d, dim) {
         return d.actual ? '__installed__' : '__missing__';
     }
     if (dim === 'age') {
-        if (d.extra) return '__gt1m__'; // unbookmarked items have no dateAdded
-        return ageKey(d.bookmark.dateAdded);
+        return ageKey(d.bookmark.dateAdded); // extra items have no dateAdded → __none__
     }
     if (dim === 'category') return d.bookmark.category || 'Default';
     return ''; // flat
@@ -132,6 +142,7 @@ function bucketLabel(dim, key) {
         if (key === '__missing__') return 'Missing';
     }
     if (dim === 'age') {
+        if (key === '__none__') return 'Not Added';
         if (key === '__lt1d__') return '< 1 day';
         if (key === '__lt1w__') return '< 1 week';
         if (key === '__lt1m__') return '< 1 month';
@@ -151,6 +162,7 @@ function groupIcon(dim, key) {
         if (key === '__missing__') return new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('disabledForeground'));
     }
     if (dim === 'age') {
+        if (key === '__none__') return new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('disabledForeground'));
         return new vscode.ThemeIcon('history', new vscode.ThemeColor('charts.purple'));
     }
     if (dim === 'category') {
@@ -165,6 +177,7 @@ class BookmarkTreeProvider {
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
         this.groupBy = store.get('groupBy', 'category');
         this.statusFilter = store.get('statusFilter', 'all');
+        this.inputQuery = store.get('inputQuery', '');
         this.categoryItems = new Map();
         this.groupItems = new Map();
         this.bookmarkItems = new Map();
@@ -172,12 +185,22 @@ class BookmarkTreeProvider {
     }
 
     refresh() {
-        // Clear node caches so stale items (renamed categories, switched
-        // dimensions, removed bookmarks) don't leak into reveal/selection.
-        this.categoryItems.clear();
-        this.groupItems.clear();
-        this.bookmarkItems.clear();
+        // Keep node caches so VSCode preserves expand/collapse state across
+        // refreshes (it tracks nodes by their stable `id`). Group/category nodes
+        // are reused and updated in place; bookmark nodes keep their id.
+        // Use invalidateCategory / invalidateGroup after structural renames.
         this._onDidChangeTreeData.fire();
+    }
+
+    /** Drop a single stale category node (e.g. after rename). */
+    invalidateCategory(name) {
+        this.categoryItems.delete(name);
+        this.bookmarkItems = new Map([...this.bookmarkItems].filter(([k]) => !k.startsWith(`category:${name.toLowerCase()}:`)));
+    }
+
+    /** Drop group nodes for a dimension (e.g. when switching groupBy). */
+    invalidateGroups() {
+        this.groupItems.clear();
     }
 
     getTreeItem(element) {
@@ -254,7 +277,7 @@ class BookmarkTreeProvider {
         const decorate = (bm) => decorateBookmark(bm, installedSet);
         const extraBookmarks = computeExtraBookmarks(installedSet);
         const all = bookmarks.map(decorate).concat(extraBookmarks.map(decorateExtra));
-        return all.filter(d => passesFilter(d, this.statusFilter));
+        return all.filter(d => passesFilter(d, this.statusFilter, this.inputQuery));
     }
 
     _sortGroup(decorated, sortingOption) {
@@ -306,10 +329,17 @@ class BookmarkTreeProvider {
             });
         }
 
-        // category root: 'Default' pinned first; ensure it exists for extras.
+        // category root: 'Default' pinned first; hide categories with no visible
+        // members (bookmarks or extras count toward their category).
         const categories = store.get('categories', []);
-        const catSet = categories.slice();
-        if (!catSet.includes('Default')) catSet.push('Default');
+        const visible = this._visibleDecorated(installedSet);
+        const counts = new Map();
+        for (const d of visible) {
+            const c = d.bookmark.category || 'Default';
+            counts.set(c, (counts.get(c) || 0) + 1);
+        }
+        const catSet = categories.slice().filter(c => counts.has(c));
+        if (counts.has('Default') && !catSet.includes('Default')) catSet.push('Default');
         return catSet.sort((a, b) => {
             if (a === 'Default') return -1;
             if (b === 'Default') return 1;

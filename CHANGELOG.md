@@ -3,6 +3,19 @@ Changelog
 
 All notable changes to Extensions Bookmark will be documented in this file.
 
+CURRENT VERSION - 1.3.1
+-----------------------
+### CHANGES
+
+- **Filter By Input.** Filter dropdown has a new "By Input…" option: type a substring and the list filters by name or id, persisted until you switch filters. Re-clicking the option re-prompts to refine.
+- **Filter by No Category.** New filter option showing bookmarks still in the default category.
+- **Group by Time Added: "Not Added" bucket.** Bookmarks without an added date (and unbookmarked items) now land in a dedicated bucket at the top instead of "> 1 month".
+- **Adding bookmarks no longer prompts for a category** — defaults to "Default"; use Move Bookmark to reclassify later.
+- **Inline ⭐/🚫 buttons now auto-sync.** Toggling wanted also installs/uninstalls to match (wanted + missing → install; not wanted + installed → uninstall).
+- **Multi-select Add to Bookmarks** for installed-but-unbookmarked items (previously only added one).
+- **Expand/collapse state preserved** when switching Sort / Filter (nodes reused by stable id).
+- **Empty categories hidden** when grouping by category.
+
 CURRENT VERSION - 1.3.0
 -----------------------
 ### CHANGES
