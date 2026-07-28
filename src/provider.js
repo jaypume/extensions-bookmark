@@ -110,9 +110,11 @@ function ageKey(dateAdded) {
 function bucketKey(d, dim) {
     if (dim === 'wanted') {
         if (d.extra) return '__extra__';
+        if (isDiffStatus(d)) return '__diff__';
         return d.want === false ? '__notwanted__' : '__wanted__';
     }
     if (dim === 'installed') {
+        if (isDiffStatus(d)) return '__diff__';
         return d.actual ? '__installed__' : '__missing__';
     }
     if (dim === 'age') {
@@ -125,8 +127,8 @@ function bucketKey(d, dim) {
 // Canonical ordering of fixed buckets; ad-hoc keys (custom categories) sort
 // alphabetically after the fixed ones.
 function bucketOrder(dim) {
-    if (dim === 'wanted') return ['__wanted__', '__notwanted__', '__extra__'];
-    if (dim === 'installed') return ['__installed__', '__missing__'];
+    if (dim === 'wanted') return ['__wanted__', '__notwanted__', '__extra__', '__diff__'];
+    if (dim === 'installed') return ['__installed__', '__missing__', '__diff__'];
     if (dim === 'age') return AGE_BUCKETS;
     if (dim === 'category') return ['Default'];
     return [];
@@ -137,10 +139,12 @@ function bucketLabel(dim, key) {
         if (key === '__wanted__') return 'Wanted';
         if (key === '__notwanted__') return 'Not Wanted';
         if (key === '__extra__') return 'Unbookmarked';
+        if (key === '__diff__') return 'Diff';
     }
     if (dim === 'installed') {
         if (key === '__installed__') return 'Installed';
         if (key === '__missing__') return 'Missing';
+        if (key === '__diff__') return 'Diff';
     }
     if (dim === 'age') {
         if (key === '__none__') return 'Not Added';
@@ -157,10 +161,12 @@ function groupIcon(dim, key) {
         if (key === '__wanted__') return new vscode.ThemeIcon('star-full', new vscode.ThemeColor('charts.yellow'));
         if (key === '__notwanted__') return new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('disabledForeground'));
         if (key === '__extra__') return new vscode.ThemeIcon('add', new vscode.ThemeColor('editorWarning.foreground'));
+        if (key === '__diff__') return new vscode.ThemeIcon('warning', new vscode.ThemeColor('editorWarning.foreground'));
     }
     if (dim === 'installed') {
         if (key === '__installed__') return new vscode.ThemeIcon('pass-filled', new vscode.ThemeColor('charts.green'));
         if (key === '__missing__') return new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('disabledForeground'));
+        if (key === '__diff__') return new vscode.ThemeIcon('warning', new vscode.ThemeColor('editorWarning.foreground'));
     }
     if (dim === 'age') {
         if (key === '__none__') return new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('disabledForeground'));

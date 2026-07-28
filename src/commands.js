@@ -46,6 +46,15 @@ function idsFromArgs(item, selection) {
     return ids;
 }
 
+/**
+ * Inline button handler: always operates on the clicked row only, ignoring
+ * any multi-selection. Right-click context menu commands stay multi-select.
+ */
+function idFromItemOnly(item) {
+    const id = idFromItem(item);
+    return id ? [id] : [];
+}
+
 /** Look up bookmark records for the given ids (extras excluded). */
 function bookmarksForIds(ids) {
     const bookmarks = store.get('bookmarks', []);
@@ -159,6 +168,29 @@ function registerCommands(deps) {
             vscode.window.showInformationMessage(`Toggled wanted for ${targets.length} bookmarks.`);
         }
     });
+
+    // --- mark wanted / not wanted (set, not toggle; multi-select aware) ---
+    // Distinct from toggleWanted: explicitly sets wantedInstall so batch
+    // operations are predictable regardless of each row's prior state.
+    async function setWantedMany(ids, setWanted) {
+        const bookmarks = store.get('bookmarks', []);
+        const lower = new Set(ids.map(id => String(id).toLowerCase()));
+        const targets = bookmarks.filter(b => lower.has(String(b.id).toLowerCase()));
+        if (targets.length === 0) return;
+        for (const bookmark of targets) bookmark.wantedInstall = setWanted;
+        store.update('bookmarks', bookmarks);
+        touchRecent(ids);
+        provider.refresh();
+        details.refresh();
+        const label = setWanted ? 'wanted' : 'not wanted';
+        if (targets.length === 1) {
+            vscode.window.showInformationMessage(`${targets[0].displayName}: ${label}`);
+        } else {
+            vscode.window.showInformationMessage(`Marked ${targets.length} bookmarks as ${label}.`);
+        }
+    }
+    reg('wantedSelected', (item, selection) => setWantedMany(idsFromArgs(item, selection), true));
+    reg('unwantedSelected', (item, selection) => setWantedMany(idsFromArgs(item, selection), false));
 
     // --- sync helpers ---
     async function applySync(bookmark) {
@@ -902,8 +934,8 @@ function registerCommands(deps) {
     // --- inline action buttons on each bookmark row ---
     // ⭐/🚫 toggle wanted, then auto-sync install state to match (unwanted+installed → uninstall,
     // wanted+missing → install). Only the clicked row is synced.
-    async function toggleWantedAndSync(item, selection) {
-        const ids = idsFromArgs(item, selection);
+    async function toggleWantedAndSync(item) {
+        const ids = idFromItemOnly(item);
         if (ids.length === 0) return;
         const bookmarks = store.get('bookmarks', []);
         const lower = new Set(ids.map(id => String(id).toLowerCase()));
@@ -921,9 +953,10 @@ function registerCommands(deps) {
     }
     reg('inlineWanted', toggleWantedAndSync);
     reg('inlineUnwanted', toggleWantedAndSync);
-    // ✅ → uninstall; ❌ → install.
-    reg('inlineInstalled', (item, selection) => vscode.commands.executeCommand(cmd('uninstallSelected'), item, selection));
-    reg('inlineMissing', (item, selection) => vscode.commands.executeCommand(cmd('installSelected'), item, selection));
+    // ✅ → uninstall; ❌ → install. Pass undefined as selection so the
+    // delegated multi-select command acts on the single clicked row only.
+    reg('inlineInstalled', (item) => vscode.commands.executeCommand(cmd('uninstallSelected'), item, undefined));
+    reg('inlineMissing', (item) => vscode.commands.executeCommand(cmd('installSelected'), item, undefined));
 
     return subs;
 }

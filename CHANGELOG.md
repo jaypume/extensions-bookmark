@@ -3,6 +3,14 @@ Changelog
 
 All notable changes to Extensions Bookmark will be documented in this file.
 
+CURRENT VERSION - 1.4.0
+-----------------------
+### CHANGES
+
+- **Diff bucket in Wanted / Installed grouping.** Both the *Group by Wanted* and *Group by Installed* views now show a **Diff** bucket collecting extensions whose expected state (`wanted`) disagrees with their actual install state — e.g. wanted but missing, unwanted but installed, or installed but unbookmarked. Makes drift visible at a glance.
+- **Inline buttons act on the clicked row only.** The star / not-wanted / install / uninstall buttons on each row now ignore multi-selection — clicking one only changes that row, even when several rows are selected.
+- **Batch actions in the context menu.** Right-click on one or more bookmarks to **Install**, **Uninstall**, **Mark Wanted**, **Mark Not Wanted**, or **Sync** the whole selection in one go. (The context menu keeps its multi-select behavior; only the inline buttons are single-row.)
+
 CURRENT VERSION - 1.3.3
 -----------------------
 ### CHANGES
