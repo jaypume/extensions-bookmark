@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to Extensions Bookmark will be documented in this file.
 
+CURRENT VERSION - 1.6.0
+-----------------------
+### CHANGES
+
+- **Native list filtering.** The List toolbar search button now opens VS Code's native TreeView filter for the current bookmark list.
+- **Global search moved to More Actions.** The existing QuickPick search remains available from the Command Palette and now appears at the top of the List view's More Actions menu.
+
 CURRENT VERSION - 1.5.0
 -----------------------
 ### CHANGES

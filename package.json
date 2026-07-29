@@ -3,7 +3,7 @@
   "displayName": "Extensions Bookmark",
   "description": "Bookmark Visual Studio Code extensions for later use.",
   "icon": "media/extension-bookmarker-logo.png",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "publisher": "pujie",
   "repository": {
     "type": "git",
@@ -27,6 +27,7 @@
     "onCommand:extensions-bookmark.removeCategory",
     "onCommand:extensions-bookmark.moveBookmark",
     "onCommand:extensions-bookmark.searchBookmarks",
+    "onCommand:extensions-bookmark.filterList",
     "onCommand:extensions-bookmark.filterAll",
     "onCommand:extensions-bookmark.filterInstalled",
     "onCommand:extensions-bookmark.filterUninstalled",
@@ -264,11 +265,12 @@
       {
         "command": "extensions-bookmark.searchBookmarks",
         "title": "Search",
-        "category": "Extensions Bookmark",
-        "icon": {
-          "light": "media/light/search-icon.png",
-          "dark": "media/dark/search-icon.png"
-        }
+        "category": "Extensions Bookmark"
+      },
+      {
+        "command": "extensions-bookmark.filterList",
+        "title": "Filter List",
+        "icon": "$(search)"
       },
       {
         "command": "extensions-bookmark.filterAll",
@@ -507,6 +509,10 @@
           "when": "false"
         },
         {
+          "command": "extensions-bookmark.filterList",
+          "when": "false"
+        },
+        {
           "command": "extensions-bookmark.groupByCategory",
           "when": "false"
         },
@@ -726,7 +732,7 @@
           "when": "view == extensionsBookmarkView"
         },
         {
-          "command": "extensions-bookmark.searchBookmarks",
+          "command": "extensions-bookmark.filterList",
           "group": "navigation@2",
           "when": "view == extensionsBookmarkView"
         },
@@ -754,6 +760,11 @@
           "command": "extensions-bookmark.expandTree",
           "group": "navigation@6",
           "when": "view == extensionsBookmarkView && !extensions-bookmark.treeExpanded"
+        },
+        {
+          "command": "extensions-bookmark.searchBookmarks",
+          "group": "9_more@0",
+          "when": "view == extensionsBookmarkView"
         },
         {
           "command": "extensions-bookmark.addFromList",

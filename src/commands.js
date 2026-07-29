@@ -731,6 +731,11 @@ function registerCommands(deps) {
 
     reg('focus', () => vscode.commands.executeCommand('extensionsBookmarkView.focus'));
 
+    reg('filterList', async () => {
+        await vscode.commands.executeCommand('extensionsBookmarkView.focus');
+        await vscode.commands.executeCommand('list.find');
+    });
+
     reg('searchBookmarks', async () => {
         const bookmarks = store.get('bookmarks', []);
         const installedSet = computeInstalledSet();
