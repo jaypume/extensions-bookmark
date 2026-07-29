@@ -63,7 +63,7 @@ function bookmarksForIds(ids) {
 }
 
 function registerCommands(deps) {
-    const { provider, details, treeView, recent } = deps;
+    const { provider, details, treeView, recent, iconCache } = deps;
     const subs = [];
     const reg = (name, fn) => subs.push(vscode.commands.registerCommand(cmd(name), fn));
     // Record touched ids into the recent history (best-effort, never throws).
@@ -73,6 +73,15 @@ function registerCommands(deps) {
             const arr = Array.isArray(ids) ? ids : [ids];
             for (const id of arr) if (id) recent.touch(id);
         } catch (_) { /* ignore */ }
+    };
+    const refreshIcons = (bookmarks) => {
+        if (!iconCache || !bookmarks?.length) return;
+        iconCache.refreshBookmarks(bookmarks, { force: true }).then(changed => {
+            if (changed) {
+                provider.refresh();
+                details.refresh();
+            }
+        });
     };
 
     // --- groupBy (submenu): category / status / flat ---
@@ -387,6 +396,7 @@ function registerCommands(deps) {
             await store.update('bookmarks', bookmarks);
             touchRecent(selectedExtension);
             provider.refresh();
+            refreshIcons([bookmark]);
             vscode.window.showInformationMessage(`Extension ${selectedExtension} has been bookmarked.`);
         } catch (error) {
             logError(`Failed to add bookmark ${selectedExtension}`, error);
@@ -423,6 +433,7 @@ function registerCommands(deps) {
         }
 
         const added = [];
+        const addedBookmarks = [];
         const failed = [];
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: 'Adding bookmarks', cancellable: false },
@@ -437,6 +448,7 @@ function registerCommands(deps) {
                         if (!bookmark) bookmark = buildBookmarkFromLocal(extensionId, 'Default');
                         existing.push(bookmark);
                         added.push(extensionId);
+                        addedBookmarks.push(bookmark);
                     } catch (error) {
                         logError(`Failed to add bookmark ${extensionId}`, error);
                         failed.push(extensionId);
@@ -448,6 +460,7 @@ function registerCommands(deps) {
             await store.update('bookmarks', existing);
             touchRecent(added);
             provider.refresh();
+            refreshIcons(addedBookmarks);
         }
         const msg = `Added ${added.length}${skipped ? `, skipped ${skipped} existing` : ''}${failed.length ? `, failed ${failed.length}` : ''}.`;
         if (failed.length) vscode.window.showWarningMessage(msg);
@@ -484,6 +497,7 @@ function registerCommands(deps) {
         const skipped = ids.filter(id => existing.has(id.toLowerCase()));
         const pending = ids.filter(id => !existing.has(id.toLowerCase()));
         const added = [];
+        const addedBookmarks = [];
         const failed = [...invalid];
         const notify = () => {
             const examples = skipped.slice(0, 3).join(', ');
@@ -503,7 +517,11 @@ function registerCommands(deps) {
                     progress.report({ increment: pending.length ? 100 / pending.length : 100, message: `${index + 1}/${pending.length}: ${id}` });
                     try {
                         const bookmark = await fetchMarketplaceBookmark(id, 'Default');
-                        if (bookmark) { bookmarks.push(bookmark); added.push(id); }
+                        if (bookmark) {
+                            bookmarks.push(bookmark);
+                            added.push(id);
+                            addedBookmarks.push(bookmark);
+                        }
                         else failed.push(id);
                     } catch (error) {
                         logError(`Failed to add bookmark ${id}`, error);
@@ -517,6 +535,7 @@ function registerCommands(deps) {
             await store.update('bookmarks', bookmarks);
             touchRecent(added);
             provider.refresh();
+            refreshIcons(addedBookmarks);
         }
         notify();
     });
@@ -710,6 +729,8 @@ function registerCommands(deps) {
         details.show(bookmark.id);
     }
 
+    reg('focus', () => vscode.commands.executeCommand('extensionsBookmarkView.focus'));
+
     reg('searchBookmarks', async () => {
         const bookmarks = store.get('bookmarks', []);
         const installedSet = computeInstalledSet();
@@ -881,13 +902,15 @@ function registerCommands(deps) {
                 const existingCategories = store.get('categories', []);
                 const existingBookmarks = store.get('bookmarks', []);
                 const mergedCategories = [...new Set([...existingCategories, ...importedCategories])];
-                const mergedBookmarks = [...existingBookmarks, ...importedBookmarks.filter(b =>
-                    !existingBookmarks.some(e => e.id === b.id))];
+                const newBookmarks = importedBookmarks.filter(b =>
+                    !existingBookmarks.some(e => e.id === b.id));
+                const mergedBookmarks = [...existingBookmarks, ...newBookmarks];
                 Promise.all([
                     store.update('categories', mergedCategories),
                     store.update('bookmarks', mergedBookmarks)
                 ]).then(() => {
                     provider.refresh();
+                    refreshIcons(newBookmarks);
                     vscode.window.showInformationMessage(`Data has been imported from ${filePath[0].fsPath}`);
                 }).catch(e => vscode.window.showErrorMessage(`Failed to update data: ${e}`));
             } catch (e) {

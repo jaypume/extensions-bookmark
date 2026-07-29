@@ -4,6 +4,7 @@
 
 const vscode = require('vscode');
 const store = require('./src/store');
+const iconCache = require('./src/iconCache');
 const { initLogger, logInfo, logError, showLog } = require('./src/logger');
 const recent = require('./src/recent');
 const { BookmarkTreeProvider } = require('./src/provider');
@@ -22,6 +23,7 @@ function activate(context) {
         store.migrate().catch(error => logError('Data migration failed', error));
         store.migrateStoredState();
         recent.init(context);
+        iconCache.init(context);
 
         const provider = new BookmarkTreeProvider();
         logInfo('Registering List tree data provider');
@@ -47,7 +49,15 @@ function activate(context) {
         vscode.commands.executeCommand('setContext', 'extensions-bookmark.filter', provider.statusFilter);
         vscode.commands.executeCommand('setContext', 'extensions-bookmark.sort', store.get('sortingOption', 'A-Z'));
         // Reflect external install/uninstall changes automatically.
-        context.subscriptions.push(vscode.extensions.onDidChange(() => provider.refresh()));
+        context.subscriptions.push(vscode.extensions.onDidChange(() => {
+            provider.refresh();
+            iconCache.refreshInstalledChanges(store.get('bookmarks', [])).then(changed => {
+                if (changed) {
+                    provider.refresh();
+                    details.refresh();
+                }
+            });
+        }));
         // Re-render details when config (e.g. recentHours) changes.
         context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => {
             if (event.affectsConfiguration('extensionsBookmark.recentHours')) {
@@ -59,7 +69,7 @@ function activate(context) {
         // Ensure categories array exists.
         if (!Array.isArray(store.get('categories', []))) store.update('categories', []);
 
-        context.subscriptions.push(...registerCommands({ provider, details, treeView, recent }));
+        context.subscriptions.push(...registerCommands({ provider, details, treeView, recent, iconCache }));
 
         context.subscriptions.push(...registerTreeExpansion(
             treeView, provider, 'extensionsBookmarkView',
@@ -67,6 +77,13 @@ function activate(context) {
             'extensions-bookmark.expandTree',
             'extensions-bookmark.collapseTree'
         ));
+
+        iconCache.refreshStale(store.get('bookmarks', [])).then(changed => {
+            if (changed) {
+                provider.refresh();
+                details.refresh();
+            }
+        });
 
         logInfo('Activation completed');
     } catch (error) {

@@ -3,7 +3,7 @@
   "displayName": "Extensions Bookmark",
   "description": "Bookmark Visual Studio Code extensions for later use.",
   "icon": "media/extension-bookmarker-logo.png",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "publisher": "pujie",
   "repository": {
     "type": "git",
@@ -19,6 +19,7 @@
     "onCommand:extensions-bookmark.addBookmark",
     "onCommand:extensions-bookmark.addExtraToBookmarks",
     "onCommand:extensions-bookmark.addFromList",
+    "onCommand:extensions-bookmark.focus",
     "onCommand:extensions-bookmark.viewBookmarks",
     "onCommand:extensions-bookmark.removeBookmark",
     "onCommand:extensions-bookmark.addCategory",
@@ -119,6 +120,7 @@
       {
         "command": "extensions-bookmark.addBookmark",
         "title": "Add Bookmark",
+        "category": "Extensions Bookmark",
         "icon": "$(add)"
       },
       {
@@ -127,7 +129,13 @@
       },
       {
         "command": "extensions-bookmark.addFromList",
-        "title": "Add Bookmarks from List"
+        "title": "Add Bookmarks from List",
+        "category": "Extensions Bookmark"
+      },
+      {
+        "command": "extensions-bookmark.focus",
+        "title": "Focus",
+        "category": "Extensions Bookmark"
       },
       {
         "command": "extensions-bookmark.viewBookmarks",
@@ -256,6 +264,7 @@
       {
         "command": "extensions-bookmark.searchBookmarks",
         "title": "Search",
+        "category": "Extensions Bookmark",
         "icon": {
           "light": "media/light/search-icon.png",
           "dark": "media/dark/search-icon.png"

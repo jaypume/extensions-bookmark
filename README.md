@@ -30,7 +30,7 @@ Extensions Bookmark is a Visual Studio Code (VSC) extension that allows you to b
 8. **Bookmark Notes**: Add, edit, and remove a personal note for each bookmark, providing added context and better recall.
 9. **View Details**: View that includes each bookmark's properties and note, as well as marketplace details such as: download count, rating, and last update date.
 10. **Remove All Data**: Ability to remove all data in one command (confirmation required).
-11. **Standalone File Storage**: All data is kept in a standalone JSON file under the extension's `globalStorage` directory (`User/globalStorage/pujie.extensions-bookmark/data.json`) instead of polluting `settings.json` — easy to back up, edit, or track in version control.
+11. **Standalone File Storage**: Synced bookmark data is kept in a standalone JSON file under the extension's `globalStorage` directory (`User/globalStorage/pujie.extensions-bookmark/data.json`) instead of polluting `settings.json` — easy to back up, edit, or track in version control. Bookmark icons are cached separately under `globalStorage/icons` and refreshed at most once every seven days.
 12. **Wanted / Not Wanted Status**: Mark each bookmark as *wanted* (you want it installed) or *not wanted* (you want it removed) via the right-click menu. Each bookmark also shows its **actual** install state, so you can see at a glance where expectation and reality diverge:
     - ✓ green `installed` — wanted and installed
     - ↓ blue `not installed` — wanted but not yet installed

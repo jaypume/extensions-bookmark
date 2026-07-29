@@ -5,6 +5,7 @@
 // `extra-installed` for installed-but-unbookmarked extensions.
 
 const vscode = require('vscode');
+const iconCache = require('./iconCache');
 
 // Status → { codicon, color }. Used for fallback iconPath (when a bookmark has
 // no marketplace icon) and the Details status icon. The dual-emoji description
@@ -134,7 +135,13 @@ function decoratedSecondary(sortingOption) {
 }
 
 function buildIconPath(bookmark, status) {
-    if (bookmark.icon) return vscode.Uri.parse(bookmark.icon);
+    const cached = iconCache.cachedUri(bookmark);
+    if (cached) return cached;
+    if (bookmark.extra && bookmark.icon) return vscode.Uri.parse(bookmark.icon);
+    if (bookmark.icon) {
+        const uri = vscode.Uri.parse(bookmark.icon);
+        if (uri.scheme === 'file') return uri;
+    }
     const v = STATUS_VISUALS[status];
     return new vscode.ThemeIcon(v.codicon, new vscode.ThemeColor(v.color));
 }

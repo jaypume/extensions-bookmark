@@ -3,6 +3,7 @@
 // Marketplace API + extension-id parsing.
 
 const DEFAULT_ICON = 'https://raw.githubusercontent.com/jaypume/extensions-bookmark/main/media/default-bookmark-icon.png';
+const MARKETPLACE_TIMEOUT_MS = 8000;
 
 function parseExtensionIds(value) {
     const seen = new Set();
@@ -24,7 +25,7 @@ function parseExtensionIds(value) {
     return { ids, invalid };
 }
 
-async function fetchMarketplaceBookmark(extensionId, category) {
+async function queryMarketplaceExtension(extensionId) {
     // Load Axios only when Marketplace access is needed.
     const axios = require('axios');
     const response = await axios.post(
@@ -36,23 +37,37 @@ async function fetchMarketplaceBookmark(extensionId, category) {
             flags: 914
         },
         {
+            timeout: MARKETPLACE_TIMEOUT_MS,
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json;api-version=3.0-preview.1'
             }
         }
     );
-    const extension = response.data.results?.[0]?.extensions?.[0];
+    return response.data.results?.[0]?.extensions?.[0] || null;
+}
+
+function marketplaceIcon(extension) {
+    const version = extension?.versions?.[0];
+    const iconFile = (version?.files || []).find(file => file.assetType === 'Microsoft.VisualStudio.Services.Icons.Default');
+    return iconFile ? iconFile.source : DEFAULT_ICON;
+}
+
+async function fetchMarketplaceIcon(extensionId) {
+    return marketplaceIcon(await queryMarketplaceExtension(extensionId));
+}
+
+async function fetchMarketplaceBookmark(extensionId, category) {
+    const extension = await queryMarketplaceExtension(extensionId);
     if (!extension) return null;
 
     const version = extension.versions[0];
-    const iconFile = (version.files || []).find(file => file.assetType === 'Microsoft.VisualStudio.Services.Icons.Default');
     const downloadCount = (extension.statistics || []).find(stat => stat.statisticName === 'install');
     const rating = (extension.statistics || []).find(stat => stat.statisticName === 'averagerating');
     return {
         id: extensionId,
         displayName: extension.displayName,
-        icon: iconFile ? iconFile.source : DEFAULT_ICON,
+        icon: marketplaceIcon(extension),
         category,
         dateAdded: new Date().toLocaleString('en-US', {
             year: 'numeric', month: 'numeric', day: 'numeric',
@@ -68,4 +83,10 @@ async function fetchMarketplaceBookmark(extensionId, category) {
     };
 }
 
-module.exports = { parseExtensionIds, fetchMarketplaceBookmark, DEFAULT_ICON };
+module.exports = {
+    parseExtensionIds,
+    fetchMarketplaceBookmark,
+    fetchMarketplaceIcon,
+    DEFAULT_ICON,
+    MARKETPLACE_TIMEOUT_MS
+};
