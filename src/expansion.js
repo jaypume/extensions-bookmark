@@ -4,7 +4,7 @@
 // Two commands share one title slot; a context key toggles which icon shows.
 
 const vscode = require('vscode');
-const store = require('./store');
+const uiState = require('./uiState');
 
 /**
  * @param {vscode.TreeView} view
@@ -15,31 +15,44 @@ const store = require('./store');
  * @param {string} collapseCmd - command id for collapse-all
  */
 function registerTreeExpansion(view, provider, viewId, ctxKey, expandCmd, collapseCmd) {
-    let current = undefined; // 去重缓存：仅当展开态真正变化时才写盘
+    const setCtx = (v) => vscode.commands.executeCommand('setContext', ctxKey, v);
 
-    const applyCtx = (v) => vscode.commands.executeCommand('setContext', ctxKey, v);
-    const persist = (v) => {
-        if (current === v) return;
-        current = v;
-        applyCtx(v);
-        store.update('treeExpanded', v);
+    // 记住各分组节点（category / status group）的展开态，重启后逐个恢复。
+    // toolbar 的 expand/collapse 总开关只保留内存 context（不持久化）。
+    const readExpanded = () => new Set(uiState.get('expandedNodes', []));
+    const writeExpanded = (set) => uiState.set('expandedNodes', [...set]);
+    const recordExpand = (el) => {
+        const id = el && el.id;
+        if (!id) return;
+        const set = readExpanded();
+        if (!set.has(id)) { set.add(id); writeExpanded(set); }
+    };
+    const recordCollapse = (el) => {
+        const id = el && el.id;
+        if (!id) return;
+        const set = readExpanded();
+        if (set.has(id)) { set.delete(id); writeExpanded(set); }
     };
 
     const expandAll = async () => {
         try {
             const roots = await provider.getChildren();
+            const set = readExpanded();
             for (const root of roots) {
                 if (root && root.collapsibleState !== undefined) {
                     try { await view.reveal(root, { expand: 3 }); } catch (_) { /* ignore */ }
+                    if (root.id) set.add(root.id);
                 }
             }
+            writeExpanded(set);
         } catch (_) { /* ignore */ }
-        persist(true);
+        setCtx(true);
     };
 
     const collapseAll = async () => {
         await vscode.commands.executeCommand(`workbench.actions.treeView.${viewId}.collapseAll`);
-        persist(false);
+        writeExpanded(new Set());
+        setCtx(false);
     };
 
     const subs = [
@@ -48,18 +61,28 @@ function registerTreeExpansion(view, provider, viewId, ctxKey, expandCmd, collap
     ];
     // Keep the toggle icon in sync with manual expand/collapse by the user.
     if (typeof view.onDidExpandElement === 'function') {
-        subs.push(view.onDidExpandElement(() => persist(true)));
+        subs.push(view.onDidExpandElement((e) => { setCtx(true); recordExpand(e.element); }));
     }
     if (typeof view.onDidCollapseElement === 'function') {
-        subs.push(view.onDidCollapseElement(() => persist(false)));
+        subs.push(view.onDidCollapseElement((e) => { setCtx(false); recordCollapse(e.element); }));
     }
 
-    // 启动恢复：从本地 ui-state 读初始展开态；若上次是展开的，补一次 expandAll
-    // 让实际节点与图标一致（persist(true) 会被去重，不重复写盘）。
-    const initial = store.get('treeExpanded', false);
-    current = initial;
-    applyCtx(initial);
-    if (initial) expandAll();
+    // 启动恢复：对上次展开过的分组节点重新 reveal(expand)。
+    setCtx(false);
+    (async () => {
+        try {
+            const expanded = readExpanded();
+            if (!expanded.size) return;
+            const roots = await provider.getChildren();
+            let any = false;
+            for (const root of roots) {
+                if (root && root.id && expanded.has(root.id)) {
+                    try { await view.reveal(root, { expand: true }); any = true; } catch (_) { /* ignore */ }
+                }
+            }
+            if (any) setCtx(true);
+        } catch (_) { /* ignore */ }
+    })();
     return subs;
 }
 

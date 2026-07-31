@@ -81,7 +81,7 @@ class DetailsTreeProvider {
         }, `${value ?? ''}\n\nClick to copy`);
 
         return [
-            copy('wanted', 'Wanted', wantVal, wantIcon),
+            copy('wanted', 'Favorite', wantVal, wantIcon),
             copy('installed', 'Installed', installedVal, installedIcon),
             copy('id', 'ID', bm.id, 'symbol-key'),
             copy('category', 'Category', bm.category || '—', 'tag'),

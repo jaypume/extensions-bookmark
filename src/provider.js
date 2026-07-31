@@ -67,7 +67,7 @@ function toBookmarkTreeItem(d) {
     const treeItem = new vscode.TreeItem(bookmark.displayName);
     treeItem.bookmarkId = bookmark.id;
     treeItem.category = bookmark.category;
-    const wantTxt = d.extra ? 'unbookmarked' : (d.want ? 'wanted' : 'not wanted');
+    const wantTxt = d.extra ? 'unbookmarked' : (d.want ? 'favorite' : 'unfavorite');
     const installedTxt = d.actual ? 'installed' : 'not installed';
     treeItem.tooltip = `ID: ${bookmark.id}\nName: ${bookmark.displayName}\nCategory: ${bookmark.category}\nExpected: ${wantTxt} / ${installedTxt}\nAdded: ${bookmark.dateAdded}\n\nDownloads: ${bookmark.downloadCount}\nRating: ${bookmark.rating}\nUpdated: ${bookmark.lastUpdate}${bookmark.note ? `\n\nNote: ${bookmark.note}` : ''}`;
     // Status lives in the row's inline icon buttons + the leading iconPath;
@@ -136,8 +136,8 @@ function bucketOrder(dim) {
 
 function bucketLabel(dim, key) {
     if (dim === 'wanted') {
-        if (key === '__wanted__') return 'Wanted';
-        if (key === '__notwanted__') return 'Not Wanted';
+        if (key === '__wanted__') return 'Favorite';
+        if (key === '__notwanted__') return 'Unfavorite';
         if (key === '__extra__') return 'Unbookmarked';
         if (key === '__diff__') return 'Diff';
     }

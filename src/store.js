@@ -3,7 +3,7 @@
 // Backing store for extensions-bookmark.
 //   data.json     — synced data: schemaVersion, categories, bookmarks (sorted by id)
 //   ui-state.json — local UI prefs (groupBy/sortingOption/statusFilter/inputQuery/
-//                   treeExpanded); not synced, restored on reload.
+//                   expandedNodes); not synced, restored on reload.
 // Session state lives in memory but is mirrored to ui-state.json so the last
 // selection survives a window reload without polluting data.json.
 //
@@ -25,7 +25,7 @@ const FILTER_VALUES = ['all', 'installed', 'uninstalled', 'wanted', 'unwanted', 
 // Keys persisted to data.json.
 const DATA_KEYS = new Set(['schemaVersion', 'categories', 'bookmarks']);
 // In-memory session keys, mirrored to local ui-state.json (not into data.json).
-const STATE_KEYS = new Set(['sortingOption', 'groupBy', 'statusFilter', 'inputQuery', 'treeExpanded']);
+const STATE_KEYS = new Set(['sortingOption', 'groupBy', 'statusFilter', 'inputQuery']);
 
 const DATA_DEFAULTS = {
     schemaVersion: SCHEMA_VERSION,
@@ -36,8 +36,7 @@ const STATE_DEFAULTS = {
     sortingOption: 'New-Old',
     groupBy: 'category',
     statusFilter: 'all',
-    inputQuery: '',
-    treeExpanded: false
+    inputQuery: ''
 };
 
 // Keys previously stored in settings.json; migrated once then cleared.
@@ -57,7 +56,6 @@ function init(context) {
     if (isSorting(saved.sortingOption)) memoryState.sortingOption = saved.sortingOption;
     if (isFilter(saved.statusFilter)) memoryState.statusFilter = saved.statusFilter;
     if (typeof saved.inputQuery === 'string') memoryState.inputQuery = saved.inputQuery;
-    if (typeof saved.treeExpanded === 'boolean') memoryState.treeExpanded = saved.treeExpanded;
     console.log('[extensions-bookmark] data path:', dataFile);
 }
 

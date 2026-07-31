@@ -172,9 +172,9 @@ function registerCommands(deps) {
         details.refresh();
         if (targets.length === 1) {
             const b = targets[0];
-            vscode.window.showInformationMessage(`${b.displayName}: ${b.wantedInstall === false ? 'not wanted' : 'wanted'}`);
+            vscode.window.showInformationMessage(`${b.displayName}: ${b.wantedInstall === false ? 'unfavorite' : 'favorite'}`);
         } else {
-            vscode.window.showInformationMessage(`Toggled wanted for ${targets.length} bookmarks.`);
+            vscode.window.showInformationMessage(`Toggled favorite for ${targets.length} bookmarks.`);
         }
     });
 
@@ -191,7 +191,7 @@ function registerCommands(deps) {
         touchRecent(ids);
         provider.refresh();
         details.refresh();
-        const label = setWanted ? 'wanted' : 'not wanted';
+        const label = setWanted ? 'favorite' : 'unfavorite';
         if (targets.length === 1) {
             vscode.window.showInformationMessage(`${targets[0].displayName}: ${label}`);
         } else {

@@ -3,7 +3,7 @@
   "displayName": "Extensions Bookmark",
   "description": "Bookmark Visual Studio Code extensions for later use.",
   "icon": "media/extension-bookmarker-logo.png",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "publisher": "pujie",
   "repository": {
     "type": "git",
@@ -201,19 +201,19 @@
       },
       {
         "command": "extensions-bookmark.sortWanted",
-        "title": "Wanted First"
+        "title": "Favorite First"
       },
       {
         "command": "extensions-bookmark.sortWantedCurrent",
-        "title": "✓ Wanted First"
+        "title": "✓ Favorite First"
       },
       {
         "command": "extensions-bookmark.sortUnwanted",
-        "title": "Not Wanted First"
+        "title": "Unfavorite First"
       },
       {
         "command": "extensions-bookmark.sortUnwantedCurrent",
-        "title": "✓ Not Wanted First"
+        "title": "✓ Unfavorite First"
       },
       {
         "command": "extensions-bookmark.sortInstalled",
@@ -303,19 +303,19 @@
       },
       {
         "command": "extensions-bookmark.filterWanted",
-        "title": "Wanted"
+        "title": "Favorite"
       },
       {
         "command": "extensions-bookmark.filterWantedCurrent",
-        "title": "✓ Wanted"
+        "title": "✓ Favorite"
       },
       {
         "command": "extensions-bookmark.filterUnwanted",
-        "title": "Not Wanted"
+        "title": "Unfavorite"
       },
       {
         "command": "extensions-bookmark.filterUnwantedCurrent",
-        "title": "✓ Not Wanted"
+        "title": "✓ Unfavorite"
       },
       {
         "command": "extensions-bookmark.filterNoCategory",
@@ -359,7 +359,7 @@
       },
       {
         "command": "extensions-bookmark.toggleWanted",
-        "title": "Toggle Wanted / Not Wanted"
+        "title": "Toggle Favorite / Unfavorite"
       },
       {
         "command": "extensions-bookmark.syncExtension",
@@ -377,20 +377,20 @@
       },
       {
         "command": "extensions-bookmark.wantedSelected",
-        "title": "Mark Wanted"
+        "title": "Mark Favorite"
       },
       {
         "command": "extensions-bookmark.unwantedSelected",
-        "title": "Mark Not Wanted"
+        "title": "Mark Unfavorite"
       },
       {
         "command": "extensions-bookmark.inlineWanted",
-        "title": "Wanted — Toggle to Not Wanted",
+        "title": "Favorite — Toggle to Unfavorite",
         "icon": "media/inline-wanted.svg"
       },
       {
         "command": "extensions-bookmark.inlineUnwanted",
-        "title": "Not Wanted — Toggle to Wanted",
+        "title": "Unfavorite — Toggle to Favorite",
         "icon": "media/inline-unwanted.svg"
       },
       {
@@ -441,12 +441,12 @@
       },
       {
         "command": "extensions-bookmark.groupByWanted",
-        "title": "Wanted",
+        "title": "Favorite",
         "icon": "$(star-full)"
       },
       {
         "command": "extensions-bookmark.groupByWantedCurrent",
-        "title": "✓ Wanted"
+        "title": "✓ Favorite"
       },
       {
         "command": "extensions-bookmark.groupByInstalled",

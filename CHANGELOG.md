@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to Extensions Bookmark will be documented in this file.
 
+CURRENT VERSION - 1.8.0
+-----------------------
+### CHANGES
+
+- **Per-group expand state.** Each category (and Wanted / Installed / Age group) you expand is now remembered individually and restored after a window reload, replacing the single global expand/collapse toggle. Persisted to the local `ui-state.json` (not synced).
+- **Wanted / Not Wanted renamed to Favorite / Unfavorite.** All user-facing labels — menus, inline buttons, group headers, tooltips, details — now say Favorite / Unfavorite. Underlying data, fields, and command ids are unchanged, so existing bookmarks and shortcuts keep working.
+
 CURRENT VERSION - 1.7.0
 -----------------------
 ### CHANGES
