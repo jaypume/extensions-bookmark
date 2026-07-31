@@ -3,6 +3,15 @@ Changelog
 
 All notable changes to Extensions Bookmark will be documented in this file.
 
+CURRENT VERSION - 1.7.0
+-----------------------
+### CHANGES
+
+- **View state is remembered.** Group By, Filter, Sort, and the expand/collapse state are now restored after a window reload. They persist to a standalone local file (`ui-state.json`) that is never written to `data.json` and is not synced.
+- **Default sort is Added New → Old.** New installs (or a cleared `ui-state.json`) now sort bookmarks newest-first instead of A → Z.
+- **Find defaults to substring match.** The List toolbar search opens VS Code's native filter in "Type to filter" (contiguous) mode instead of fuzzy matching. Your global setting is left untouched.
+- **Active filter indicator.** The Filter toolbar button switches to a filled funnel icon whenever a filter other than All is active.
+
 CURRENT VERSION - 1.6.0
 -----------------------
 ### CHANGES

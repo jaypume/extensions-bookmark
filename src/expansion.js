@@ -4,6 +4,7 @@
 // Two commands share one title slot; a context key toggles which icon shows.
 
 const vscode = require('vscode');
+const store = require('./store');
 
 /**
  * @param {vscode.TreeView} view
@@ -14,7 +15,15 @@ const vscode = require('vscode');
  * @param {string} collapseCmd - command id for collapse-all
  */
 function registerTreeExpansion(view, provider, viewId, ctxKey, expandCmd, collapseCmd) {
-    const setCtx = (v) => vscode.commands.executeCommand('setContext', ctxKey, v);
+    let current = undefined; // 去重缓存：仅当展开态真正变化时才写盘
+
+    const applyCtx = (v) => vscode.commands.executeCommand('setContext', ctxKey, v);
+    const persist = (v) => {
+        if (current === v) return;
+        current = v;
+        applyCtx(v);
+        store.update('treeExpanded', v);
+    };
 
     const expandAll = async () => {
         try {
@@ -25,28 +34,32 @@ function registerTreeExpansion(view, provider, viewId, ctxKey, expandCmd, collap
                 }
             }
         } catch (_) { /* ignore */ }
-        setCtx(true);
+        persist(true);
     };
 
     const collapseAll = async () => {
         await vscode.commands.executeCommand(`workbench.actions.treeView.${viewId}.collapseAll`);
-        setCtx(false);
+        persist(false);
     };
 
-    // Keep the toggle icon in sync with manual expand/collapse by the user.
     const subs = [
         vscode.commands.registerCommand(expandCmd, expandAll),
         vscode.commands.registerCommand(collapseCmd, collapseAll)
     ];
     // Keep the toggle icon in sync with manual expand/collapse by the user.
     if (typeof view.onDidExpandElement === 'function') {
-        subs.push(view.onDidExpandElement(() => setCtx(true)));
+        subs.push(view.onDidExpandElement(() => persist(true)));
     }
     if (typeof view.onDidCollapseElement === 'function') {
-        subs.push(view.onDidCollapseElement(() => setCtx(false)));
+        subs.push(view.onDidCollapseElement(() => persist(false)));
     }
 
-    setCtx(false);
+    // 启动恢复：从本地 ui-state 读初始展开态；若上次是展开的，补一次 expandAll
+    // 让实际节点与图标一致（persist(true) 会被去重，不重复写盘）。
+    const initial = store.get('treeExpanded', false);
+    current = initial;
+    applyCtx(initial);
+    if (initial) expandAll();
     return subs;
 }
 

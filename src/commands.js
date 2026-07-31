@@ -734,6 +734,11 @@ function registerCommands(deps) {
     reg('filterList', async () => {
         await vscode.commands.executeCommand('extensionsBookmarkView.focus');
         await vscode.commands.executeCommand('list.find');
+        // 默认关闭模糊匹配：若全局默认是 fuzzy，翻转一次到 contiguous（不改全局设置）。
+        const mode = vscode.workspace.getConfiguration('workbench.list').get('defaultFindMatchType', 'fuzzy');
+        if (mode === 'fuzzy') {
+            try { await vscode.commands.executeCommand('list.toggleFindMatchType'); } catch (_) { /* older VSCode lacks the command */ }
+        }
     });
 
     reg('searchBookmarks', async () => {

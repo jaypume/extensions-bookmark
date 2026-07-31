@@ -47,7 +47,7 @@ function activate(context) {
         // Reflect the active groupBy/filter/sort in their submenu ✓ markers.
         vscode.commands.executeCommand('setContext', 'extensions-bookmark.groupBy', provider.groupBy);
         vscode.commands.executeCommand('setContext', 'extensions-bookmark.filter', provider.statusFilter);
-        vscode.commands.executeCommand('setContext', 'extensions-bookmark.sort', store.get('sortingOption', 'A-Z'));
+        vscode.commands.executeCommand('setContext', 'extensions-bookmark.sort', store.get('sortingOption', 'New-Old'));
         // Reflect external install/uninstall changes automatically.
         context.subscriptions.push(vscode.extensions.onDidChange(() => {
             provider.refresh();

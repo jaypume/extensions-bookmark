@@ -1,10 +1,11 @@
 'use strict';
 
 // Backing store for extensions-bookmark.
-//   data.json — synced data: schemaVersion, categories, bookmarks (sorted by id)
-// Session state (groupBy, sortingOption, statusFilter, inputQuery) is kept
-// purely in-memory — it resets to defaults on window reload and never touches
-// disk, so it can't pollute version control.
+//   data.json     — synced data: schemaVersion, categories, bookmarks (sorted by id)
+//   ui-state.json — local UI prefs (groupBy/sortingOption/statusFilter/inputQuery/
+//                   treeExpanded); not synced, restored on reload.
+// Session state lives in memory but is mirrored to ui-state.json so the last
+// selection survives a window reload without polluting data.json.
 //
 // Module-level singleton: call init(context) once in activate(), then use
 // get()/update() anywhere.
@@ -12,6 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
+const uiState = require('./uiState');
 
 const DATA_FILE = 'data.json';
 const SCHEMA_VERSION = 2;
@@ -22,8 +24,8 @@ const FILTER_VALUES = ['all', 'installed', 'uninstalled', 'wanted', 'unwanted', 
 
 // Keys persisted to data.json.
 const DATA_KEYS = new Set(['schemaVersion', 'categories', 'bookmarks']);
-// In-memory session keys (never persisted).
-const STATE_KEYS = new Set(['sortingOption', 'groupBy', 'statusFilter', 'inputQuery']);
+// In-memory session keys, mirrored to local ui-state.json (not into data.json).
+const STATE_KEYS = new Set(['sortingOption', 'groupBy', 'statusFilter', 'inputQuery', 'treeExpanded']);
 
 const DATA_DEFAULTS = {
     schemaVersion: SCHEMA_VERSION,
@@ -31,10 +33,11 @@ const DATA_DEFAULTS = {
     bookmarks: []
 };
 const STATE_DEFAULTS = {
-    sortingOption: 'A-Z',
+    sortingOption: 'New-Old',
     groupBy: 'category',
     statusFilter: 'all',
-    inputQuery: ''
+    inputQuery: '',
+    treeExpanded: false
 };
 
 // Keys previously stored in settings.json; migrated once then cleared.
@@ -46,7 +49,15 @@ const memoryState = { ...STATE_DEFAULTS };
 
 function init(context) {
     dataFile = path.join(context.globalStorageUri.fsPath, DATA_FILE);
+    uiState.init(context);
     Object.assign(memoryState, STATE_DEFAULTS);
+    // 用本地 ui-state.json 恢复上次的 UI 偏好（仅取合法值）。
+    const saved = uiState.load();
+    if (isGroupBy(saved.groupBy)) memoryState.groupBy = saved.groupBy;
+    if (isSorting(saved.sortingOption)) memoryState.sortingOption = saved.sortingOption;
+    if (isFilter(saved.statusFilter)) memoryState.statusFilter = saved.statusFilter;
+    if (typeof saved.inputQuery === 'string') memoryState.inputQuery = saved.inputQuery;
+    if (typeof saved.treeExpanded === 'boolean') memoryState.treeExpanded = saved.treeExpanded;
     console.log('[extensions-bookmark] data path:', dataFile);
 }
 
@@ -124,6 +135,7 @@ function get(key, fallback) {
 function update(key, value /*, target ignored */) {
     if (STATE_KEYS.has(key)) {
         memoryState[key] = value;
+        uiState.set(key, value); // 本地持久化（不进 data.json、不同步）
         return Promise.resolve();
     }
     const data = readData();
