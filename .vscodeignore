@@ -1,5 +1,8 @@
 .vscode/**
+.agents
 .agents/**
+.local
+.local/**
 .vscodeignore
 .git/**
 exports/**
