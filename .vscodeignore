@@ -10,3 +10,4 @@ vsix/**
 *.vsix
 *.log
 media/svg/**
+.codegraph/**
