@@ -86,7 +86,9 @@ function buildBookmarkFromLocal(extensionId, category) {
         downloadCount: 'N/A',
         rating: 'N/A',
         lastUpdate: lastUpdated,
-        wantedInstall: true
+        // Built from a locally-installed extension: default to unfavorite so
+        // bookmarked-but-already-installed extensions aren't treated as wanted.
+        wantedInstall: false
     };
 }
 

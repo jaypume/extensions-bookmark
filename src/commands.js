@@ -62,6 +62,16 @@ function bookmarksForIds(ids) {
     return bookmarks.filter(b => set.has(String(b.id).toLowerCase()));
 }
 
+/**
+ * Freshly bookmarked extensions that are already installed default to
+ * unfavorite (not favorite): they're present, so they aren't "wanted" until
+ * the user marks them so. Returns the bookmark for chaining.
+ */
+function defaultWantedForAdd(bookmark, id) {
+    if (bookmark && isInstalled(id)) bookmark.wantedInstall = false;
+    return bookmark;
+}
+
 function registerCommands(deps) {
     const { provider, details, treeView, recent, iconCache } = deps;
     const subs = [];
@@ -387,7 +397,7 @@ function registerCommands(deps) {
         }
 
         try {
-            const bookmark = await fetchMarketplaceBookmark(selectedExtension, 'Default');
+            const bookmark = defaultWantedForAdd(await fetchMarketplaceBookmark(selectedExtension, 'Default'), selectedExtension);
             if (!bookmark) {
                 vscode.window.showErrorMessage(`Extension ${selectedExtension} not found.`);
                 return;
@@ -446,6 +456,7 @@ function registerCommands(deps) {
                         try { bookmark = await fetchMarketplaceBookmark(extensionId, 'Default'); }
                         catch (marketError) { logError(`Marketplace lookup failed for ${extensionId}, using local data`, marketError); }
                         if (!bookmark) bookmark = buildBookmarkFromLocal(extensionId, 'Default');
+                        defaultWantedForAdd(bookmark, extensionId);
                         existing.push(bookmark);
                         added.push(extensionId);
                         addedBookmarks.push(bookmark);
@@ -516,7 +527,7 @@ function registerCommands(deps) {
                     const id = pending[index];
                     progress.report({ increment: pending.length ? 100 / pending.length : 100, message: `${index + 1}/${pending.length}: ${id}` });
                     try {
-                        const bookmark = await fetchMarketplaceBookmark(id, 'Default');
+                        const bookmark = defaultWantedForAdd(await fetchMarketplaceBookmark(id, 'Default'), id);
                         if (bookmark) {
                             bookmarks.push(bookmark);
                             added.push(id);
@@ -663,17 +674,28 @@ function registerCommands(deps) {
         if (!selectedCategory) return;
 
         const index = categories.indexOf(selectedCategory);
-        if (index > -1) {
-            categories.splice(index, 1);
-            const toReassign = bookmarks.filter(b => b.category === selectedCategory);
-            toReassign.forEach(b => { bookmarks[bookmarks.indexOf(b)].category = 'Default'; });
-            await store.update('categories', categories);
-            await store.update('bookmarks', bookmarks);
-            provider.refresh();
-            vscode.window.showInformationMessage(toReassign.length > 0
-                ? `Category ${selectedCategory} has been removed and its bookmarks moved to Default.`
-                : `Category ${selectedCategory} has been removed.`);
-        }
+        if (index === -1) return;
+
+        // Destructive: the category is removed and its bookmarks move to
+        // Default, so require an explicit confirmation first.
+        const toReassign = bookmarks.filter(b => b.category === selectedCategory);
+        const confirm = await vscode.window.showWarningMessage(
+            toReassign.length > 0
+                ? `Delete category "${selectedCategory}"? Its ${toReassign.length} bookmark(s) will be moved to Default.`
+                : `Delete category "${selectedCategory}"?`,
+            { modal: true },
+            'Delete'
+        );
+        if (confirm !== 'Delete') return;
+
+        categories.splice(index, 1);
+        toReassign.forEach(b => { bookmarks[bookmarks.indexOf(b)].category = 'Default'; });
+        await store.update('categories', categories);
+        await store.update('bookmarks', bookmarks);
+        provider.refresh();
+        vscode.window.showInformationMessage(toReassign.length > 0
+            ? `Category ${selectedCategory} has been removed and its bookmarks moved to Default.`
+            : `Category ${selectedCategory} has been removed.`);
     });
 
     reg('moveBookmark', async (item, selection) => {

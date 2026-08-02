@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to Extensions Bookmark will be documented in this file.
 
+CURRENT VERSION - 1.8.1
+-----------------------
+### CHANGES
+
+- **New bookmarks from installed extensions default to Unfavorite.** Adding an extension that is already installed — from the Unbookmarked/Diff bucket, by ID, or from a list — now starts as Unfavorite instead of Favorite. The extension is bookmarked but not treated as "wanted". Adding an extension that is not installed still defaults to Favorite.
+- **Category deletion requires confirmation.** Removing a category now asks for explicit confirmation first (its bookmarks are moved to Default on delete), preventing accidental removal.
+
 CURRENT VERSION - 1.8.0
 -----------------------
 ### CHANGES
