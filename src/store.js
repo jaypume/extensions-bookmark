@@ -2,8 +2,8 @@
 
 // Backing store for extensions-bookmark.
 //   data.json     — synced data: schemaVersion, categories, bookmarks (sorted by id)
-//   ui-state.json — local UI prefs (groupBy/sortingOption/statusFilter/inputQuery/
-//                   expandedNodes); not synced, restored on reload.
+//   ui-state.json — local UI prefs (groupBy/sortingOption/statusFilter/inputQuery);
+//                   not synced, restored on reload.
 // Session state lives in memory but is mirrored to ui-state.json so the last
 // selection survives a window reload without polluting data.json.
 //

@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to Extensions Bookmark will be documented in this file.
 
+CURRENT VERSION - 1.9.0
+-----------------------
+### CHANGES
+
+- **Expand/collapse state is no longer remembered.** Individual group expand state is no longer persisted across reloads; every reload starts with all groups collapsed. The expand-all / collapse-all toolbar toggle still works within a session.
+- **Category mode defaults to expanding only Default.** When grouping by Category, only the Default folder is expanded on startup; all other category folders start collapsed.
+
 CURRENT VERSION - 1.8.1
 -----------------------
 ### CHANGES

@@ -2,13 +2,14 @@
 
 // collapse-all / expand-all factory for a tree view.
 // Two commands share one title slot; a context key toggles which icon shows.
+// 不记住展开/折叠状态：展开态仅在当前会话内存中维护。
+// folder (category) 模式启动时默认只展开 Default 分组。
 
 const vscode = require('vscode');
-const uiState = require('./uiState');
 
 /**
  * @param {vscode.TreeView} view
- * @param {object} provider - exposes getChildren()
+ * @param {object} provider - exposes getChildren() 与 groupBy
  * @param {string} viewId - the tree view id (for the built-in collapseAll command)
  * @param {string} ctxKey - context key reflecting expanded state
  * @param {string} expandCmd - command id for expand-all
@@ -17,41 +18,20 @@ const uiState = require('./uiState');
 function registerTreeExpansion(view, provider, viewId, ctxKey, expandCmd, collapseCmd) {
     const setCtx = (v) => vscode.commands.executeCommand('setContext', ctxKey, v);
 
-    // 记住各分组节点（category / status group）的展开态，重启后逐个恢复。
-    // toolbar 的 expand/collapse 总开关只保留内存 context（不持久化）。
-    const readExpanded = () => new Set(uiState.get('expandedNodes', []));
-    const writeExpanded = (set) => uiState.set('expandedNodes', [...set]);
-    const recordExpand = (el) => {
-        const id = el && el.id;
-        if (!id) return;
-        const set = readExpanded();
-        if (!set.has(id)) { set.add(id); writeExpanded(set); }
-    };
-    const recordCollapse = (el) => {
-        const id = el && el.id;
-        if (!id) return;
-        const set = readExpanded();
-        if (set.has(id)) { set.delete(id); writeExpanded(set); }
-    };
-
     const expandAll = async () => {
         try {
             const roots = await provider.getChildren();
-            const set = readExpanded();
             for (const root of roots) {
                 if (root && root.collapsibleState !== undefined) {
                     try { await view.reveal(root, { expand: 3 }); } catch (_) { /* ignore */ }
-                    if (root.id) set.add(root.id);
                 }
             }
-            writeExpanded(set);
         } catch (_) { /* ignore */ }
         setCtx(true);
     };
 
     const collapseAll = async () => {
         await vscode.commands.executeCommand(`workbench.actions.treeView.${viewId}.collapseAll`);
-        writeExpanded(new Set());
         setCtx(false);
     };
 
@@ -59,28 +39,24 @@ function registerTreeExpansion(view, provider, viewId, ctxKey, expandCmd, collap
         vscode.commands.registerCommand(expandCmd, expandAll),
         vscode.commands.registerCommand(collapseCmd, collapseAll)
     ];
-    // Keep the toggle icon in sync with manual expand/collapse by the user.
+    // toolbar 图标跟随用户手动展开/折叠同步（仅内存，不持久化）。
     if (typeof view.onDidExpandElement === 'function') {
-        subs.push(view.onDidExpandElement((e) => { setCtx(true); recordExpand(e.element); }));
+        subs.push(view.onDidExpandElement(() => setCtx(true)));
     }
     if (typeof view.onDidCollapseElement === 'function') {
-        subs.push(view.onDidCollapseElement((e) => { setCtx(false); recordCollapse(e.element); }));
+        subs.push(view.onDidCollapseElement(() => setCtx(false)));
     }
 
-    // 启动恢复：对上次展开过的分组节点重新 reveal(expand)。
+    // 启动默认：folder (category) 模式只展开 Default 分组，其余折叠。
     setCtx(false);
     (async () => {
         try {
-            const expanded = readExpanded();
-            if (!expanded.size) return;
+            if (provider.groupBy !== 'category') return;
             const roots = await provider.getChildren();
-            let any = false;
-            for (const root of roots) {
-                if (root && root.id && expanded.has(root.id)) {
-                    try { await view.reveal(root, { expand: true }); any = true; } catch (_) { /* ignore */ }
-                }
+            const defaultNode = roots.find(r => r && r.id === 'category:Default');
+            if (defaultNode) {
+                try { await view.reveal(defaultNode, { expand: true }); setCtx(true); } catch (_) { /* ignore */ }
             }
-            if (any) setCtx(true);
         } catch (_) { /* ignore */ }
     })();
     return subs;

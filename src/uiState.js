@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 const FILE = 'ui-state.json';
-const KEYS = new Set(['groupBy', 'sortingOption', 'statusFilter', 'inputQuery', 'expandedNodes']);
+const KEYS = new Set(['groupBy', 'sortingOption', 'statusFilter', 'inputQuery']);
 
 let file = null;
 
